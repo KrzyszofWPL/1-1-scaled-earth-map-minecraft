@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "id": "geoid",
+  "version": "${version}",
+  "name": "Geoid — Spherical Earth Engine",
+  "description": "Turns a Tellus 1:1 flat map into a closed spherical planet: seamless circumnavigation via coordinate folding, spherical gravity, and antipodal core traversal.",
+  "authors": [
+    "Tellus community"
+  ],
+  "contact": {
+    "sources": "https://github.com/krzyszofwpl/1-1-scaled-earth-map-minecraft"
+  },
+  "license": "MIT",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "earth.tellus.geoid.GeoidMod"
+    ],
+    "client": [
+      "earth.tellus.geoid.client.GeoidClient"
+    ]
+  },
+  "mixins": [
+    "geoid.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.16.0",
+    "fabric-api": "*",
+    "minecraft": "~1.21.3",
+    "java": ">=21"
+  },
+  "suggests": {
+    "tellus": "*"
+  }
+}

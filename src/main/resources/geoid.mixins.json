@@ -1,0 +1,15 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "earth.tellus.geoid.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "EntityGravityMixin"
+  ],
+  "client": [
+    "CameraRollMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

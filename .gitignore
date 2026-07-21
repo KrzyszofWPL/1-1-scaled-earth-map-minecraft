@@ -1,0 +1,22 @@
+# Gradle / build
+.gradle/
+build/
+out/
+*.class
+
+# Loom / Minecraft run dirs
+run/
+.fabric/
+remappedSrc/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project
+bin/
+
+# OS
+.DS_Store
