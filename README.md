@@ -1,5 +1,7 @@
 # Geoid — silnik kulistej Ziemi dla moda Tellus
 
+[![build](https://github.com/KrzyszofWPL/1-1-scaled-earth-map-minecraft/actions/workflows/build.yml/badge.svg?branch=claude/minecraft-spherical-engine-2l6jam)](https://github.com/KrzyszofWPL/1-1-scaled-earth-map-minecraft/actions/workflows/build.yml)
+
 Companion mod dla **Fabric**, który zmienia płaską mapę 1:1 generowaną przez **Tellus** w
 **zamkniętą kulę ziemską**. Realizuje dwa założenia z zadania:
 
@@ -165,6 +167,13 @@ Celowany stack: **Fabric / Yarn, Minecraft 1.21.3, Java 21** (patrz `gradle.prop
 matematyczna jest niezależna od wersji i objęta testami JUnit (`./gradlew test`). Warstwy dotykające
 wnętrzności MC (mixiny, tickety chunków, sieć) są oznaczone komentarzami w miejscach zależnych od
 mapowań — przy zmianie wersji poprawia się tylko te punkty, logika zostaje.
+
+**Status builda:** pipeline CI (`.github/workflows/build.yml`) buduje mod na runnerach GitHub Actions
+i jest **zielony** — `./gradlew build` kompiluje cały kod (w tym oba mixiny i warstwę sieci/chunków)
+przeciw Minecraft 1.21.3 przez Fabric Loom, przechodzi testy jednostkowe i produkuje `geoid-*.jar`
+(artefakt `geoid-jars`). To potwierdza poprawność mapowań i wersji. **Uwaga:** zielony build oznacza
+„kompiluje się, testy przechodzą, jar powstaje" — nie zastępuje testów w żywej grze (faktyczne
+zachowanie mixinów w runtime, feel seamless-teleportu, preload chunków pod obciążeniem).
 
 `CameraRollMixin` to najbardziej wrażliwy na wersję hak (nazwy pól `Camera`), a `EntityGravityMixin`
 celuje w `applyGravity()` (MC 1.21.3+); dla starszych wersji retarget do `LivingEntity#travel`.
