@@ -36,3 +36,81 @@ jobs:
           name: geoid-jars
           path: build/libs/*.jar
           if-no-files-found: ignore
+
+  server-smoke:
+    # Boots a REAL Minecraft dedicated server with the mod to prove the mixins apply at runtime.
+    # With mixin defaultRequire=1, a missing injection target crashes startup, so reaching "Done"
+    # means EntityGravityMixin injected into the live Entity class and GeoidMod.onInitialize ran.
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
+      - name: Boot dedicated server with the mod
+        run: |
+          set -uo pipefail
+          mkdir -p run
+          printf 'eula=true\n' > run/eula.txt
+          printf 'online-mode=false\nmax-tick-time=-1\n' > run/server.properties
+
+          # Start the Fabric dedicated server in the background; capture all output.
+          timeout --preserve-status 480 ./gradlew runServer --console=plain > server.out 2>&1 &
+          GP=$!
+
+          started=0
+          for i in $(seq 1 210); do
+            if grep -q 'Done (' server.out run/logs/latest.log 2>/dev/null; then started=1; echo ">> server reached 'Done'"; break; fi
+            if grep -Eqi 'InvalidInjectionException|Mixin apply failed|Failed to start the minecraft server|A mod crashed' server.out run/logs/latest.log 2>/dev/null; then echo ">> fatal error detected"; break; fi
+            if ! kill -0 "$GP" 2>/dev/null; then echo ">> gradle exited early"; break; fi
+            sleep 2
+          done
+
+          sleep 2
+          # Tear the server down; we already have the startup logs we need.
+          pkill -f 'KnotServer' 2>/dev/null || true
+          pkill -f 'runServer'  2>/dev/null || true
+          kill "$GP" 2>/dev/null || true
+          wait "$GP" 2>/dev/null || true
+
+          echo "==================== ASSERTIONS ===================="
+          FAIL=0
+          if grep -q 'Geoid spherical-earth engine initialised' server.out run/logs/latest.log 2>/dev/null; then
+            echo "PASS: GeoidMod.onInitialize ran -> mod loaded & initialised in a live server"
+          else
+            echo "FAIL: geoid init log line not found"; FAIL=1
+          fi
+          if grep -Eqi 'InvalidInjectionException|Mixin apply failed|was not found in target' server.out run/logs/latest.log 2>/dev/null; then
+            echo "FAIL: mixin injection error at runtime"; FAIL=1
+          else
+            echo "PASS: no mixin injection errors -> EntityGravityMixin applied to net.minecraft.entity.Entity"
+          fi
+          if [ "$started" = "1" ]; then
+            echo "PASS: dedicated server reached full startup with the mod active"
+          else
+            echo "FAIL: server never reached 'Done'"; FAIL=1
+          fi
+
+          echo "==================== RELEVANT LOG LINES ===================="
+          grep -hnE 'geoid|Geoid|Loading [0-9]+ mods|Mixin|Done \(|Preparing|Environment: SERVER' server.out run/logs/latest.log 2>/dev/null | head -50 || true
+          echo "==================== TAIL ===================="
+          tail -70 server.out 2>/dev/null || true
+          exit $FAIL
+
+      - name: Upload server logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-smoke-logs
+          path: |
+            server.out
+            run/logs/latest.log
+          if-no-files-found: ignore

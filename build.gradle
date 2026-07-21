@@ -10,6 +10,16 @@ base {
     archivesName = project.archives_base_name
 }
 
+loom {
+    runs {
+        // The dedicated-server run is used by CI as a runtime smoke test: it boots a real
+        // Minecraft server with the mod so we can confirm the mixins actually apply in-engine.
+        server {
+            vmArg "-Djava.awt.headless=true"
+        }
+    }
+}
+
 repositories {
     // Add the Tellus maven here once it is published; the build works without it (soft dependency).
 }
