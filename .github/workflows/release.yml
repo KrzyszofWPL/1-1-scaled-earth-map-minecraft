@@ -1,0 +1,78 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release (e.g. v0.1.0)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
+      - name: Build mod jar
+        run: ./gradlew build --stacktrace
+
+      - name: Determine tag
+        id: tag
+        run: |
+          TAG="${{ github.event.inputs.tag }}"
+          if [ -z "$TAG" ]; then TAG="${GITHUB_REF_NAME}"; fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Releasing tag: $TAG"
+          echo "Jars to attach:"
+          ls -la build/libs/ || true
+
+      - name: Write release notes
+        run: |
+          cat > RELEASE_NOTES.md <<'EOF'
+          **Geoid — silnik kulistej Ziemi dla moda Tellus** (mod Fabric, Minecraft 1.21.3).
+
+          Zamienia płaską mapę 1:1 w zamkniętą kulę: seamless circumnavigation (coordinate
+          folding), grawitacja sferyczna i kopanie do antypodów przez jądro.
+
+          ### Instalacja
+          1. Fabric Loader dla Minecraft **1.21.3**.
+          2. **Fabric API** (`0.110.0+1.21.3`) do folderu `mods/` — wymagane.
+          3. `geoid-*.jar` (z załączników poniżej) do `mods/`.
+          4. Opcjonalnie: mod **Tellus** do `mods/` (bez niego działa fallback — płaska równoprostokątna kula).
+
+          ### Status
+          Wersja rozwojowa/referencyjna. Zweryfikowane na CI: testy matematyki, pełna
+          kompilacja vs Minecraft 1.21.3 oraz **załadowanie moda i aplikacja mixinów na
+          żywym serwerze** (log: `Geoid spherical-earth engine initialised` + `Done`).
+          Pełne wizualne zachowania w kliencie (roll kamery, seamless-teleport, kopanie do
+          antypodu) nie były jeszcze przeklikane w grze. Wiązanie z Tellusem to na razie
+          zaślepka → fallback.
+
+          Plik do gry: **`geoid-0.1.0.jar`** (pomiń `-sources.jar`).
+          EOF
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ steps.tag.outputs.tag }}" \
+            build/libs/geoid-*.jar \
+            --title "Geoid ${{ steps.tag.outputs.tag }}" \
+            --notes-file RELEASE_NOTES.md \
+            --target "${GITHUB_SHA}"
