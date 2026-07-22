@@ -23,6 +23,18 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x ./gradlew
 
+      - name: TEMP - dump 1.21.11 API surface for the classes we're porting
+        run: |
+          ./gradlew -q dumpApi | tee mcjar.txt
+          MCJAR=$(grep MCJAR_PATH:: mcjar.txt | sed 's/MCJAR_PATH:://')
+          echo "Using jar: $MCJAR"
+          echo "=== Entity ==="
+          javap -p -classpath "$MCJAR" net.minecraft.entity.Entity 2>&1 || true
+          echo "=== ServerPlayerEntity ==="
+          javap -p -classpath "$MCJAR" net.minecraft.server.network.ServerPlayerEntity 2>&1 || true
+          echo "=== ChunkTicketType ==="
+          javap -p -classpath "$MCJAR" net.minecraft.server.world.ChunkTicketType 2>&1 || true
+
       - name: Run unit tests (pure spherical math)
         run: ./gradlew test --stacktrace
 
