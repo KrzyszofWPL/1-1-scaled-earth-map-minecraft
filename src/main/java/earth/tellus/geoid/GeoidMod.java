@@ -32,7 +32,7 @@ public final class GeoidMod implements ModInitializer {
                 try {
                     GeoidServer.get().tickPlayer(player);
                 } catch (Throwable t) {
-                    LOG.error("Geoid tick failed for {}", player.getGameProfile().getName(), t);
+                    LOG.error("Geoid tick failed for {}", player.getName().getString(), t);
                 }
             }
         });
