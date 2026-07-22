@@ -36,6 +36,11 @@ public final class GeoidConfig {
      *  toward the antipodal surface so players fall out the far side. Defaults to the realistic model. */
     public boolean coreExitAssist = false;
 
+    /** Debug aid: play a sound/particle burst and show an action-bar message on every longitude/pole
+     *  fold, so a seam crossing is perceptible instead of perfectly invisible. Off by default — the
+     *  whole point of folding is that it normally isn't felt. */
+    public boolean debugFoldFeedback = false;
+
     public static GeoidConfig get() {
         return instance;
     }

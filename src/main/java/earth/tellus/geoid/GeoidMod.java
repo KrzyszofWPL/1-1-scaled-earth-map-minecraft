@@ -1,8 +1,10 @@
 package earth.tellus.geoid;
 
+import earth.tellus.geoid.command.GeoidCommand;
 import earth.tellus.geoid.net.GeoStatePayload;
 import earth.tellus.geoid.world.GeoidServer;
 import net.fabricmc.api.ModInitializer;
+import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
@@ -25,6 +27,10 @@ public final class GeoidMod implements ModInitializer {
     public void onInitialize() {
         // Register the server -> client state snapshot channel.
         PayloadTypeRegistry.playS2C().register(GeoStatePayload.ID, GeoStatePayload.CODEC);
+
+        // OP-only /geoid command to tune the engine live (see GeoidCommand).
+        CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
+                GeoidCommand.register(dispatcher));
 
         // Drive the spherical engine once per player per tick.
         ServerTickEvents.END_SERVER_TICK.register(server -> {

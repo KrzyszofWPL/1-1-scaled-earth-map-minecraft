@@ -16,10 +16,15 @@ import earth.tellus.geoid.math.Vec3;
 import earth.tellus.geoid.net.GeoStatePayload;
 import earth.tellus.geoid.physics.SphericalPhysics;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import net.minecraft.particle.ParticleTypes;
 import net.minecraft.registry.RegistryKey;
 import net.minecraft.registry.RegistryKeys;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
+import net.minecraft.sound.SoundCategory;
+import net.minecraft.sound.SoundEvents;
+import net.minecraft.text.Text;
+import net.minecraft.util.Formatting;
 import net.minecraft.util.Identifier;
 import net.minecraft.world.Heightmap;
 import net.minecraft.world.World;
@@ -161,6 +166,23 @@ public final class GeoidServer {
         setVelocity(player, vel); // keep momentum across the seam
         state.bearingRad += bearingDelta;
         state.foldEpoch++;
+
+        if (GeoidConfig.get().debugFoldFeedback) {
+            playFoldFeedback(player);
+        }
+    }
+
+    /**
+     * Debug-only perceptual cue for a seam crossing (see {@link GeoidConfig#debugFoldFeedback}). The
+     * fold itself is designed to be unnoticeable — this exists purely so a player/dev who turns the
+     * flag on via {@code /geoid debugFold true} can confirm a wrap actually fired.
+     */
+    private static void playFoldFeedback(ServerPlayerEntity player) {
+        ServerWorld world = (ServerWorld) player.getEntityWorld();
+        world.playSound(null, player.getBlockPos(), SoundEvents.BLOCK_PORTAL_TRAVEL, SoundCategory.PLAYERS, 0.4f, 1.6f);
+        world.spawnParticles(ParticleTypes.PORTAL,
+                player.getX(), player.getY() + 1.0, player.getZ(), 30, 0.5, 1.0, 0.5, 0.05);
+        player.sendMessage(Text.literal("~ world seam crossed ~").formatted(Formatting.GRAY, Formatting.ITALIC), true);
     }
 
     // ------------------------------------------------------------------ core traversal / antipode
