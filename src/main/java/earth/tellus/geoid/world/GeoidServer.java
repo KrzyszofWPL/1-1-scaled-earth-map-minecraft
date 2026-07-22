@@ -102,7 +102,7 @@ public final class GeoidServer {
      */
     public void tickPlayer(ServerPlayerEntity player) {
         GeoidConfig cfg = GeoidConfig.get();
-        ServerWorld overworld = player.getServer().getOverworld();
+        ServerWorld overworld = player.getEntityWorld().getServer().getOverworld();
         WorldFolding folding = foldingFor(overworld);
         AntipodeChunkLoader loader = loaderFor(overworld);
         PlayerGeoState state = stateFor(player, folding);
@@ -176,7 +176,7 @@ public final class GeoidServer {
         state.frame = tunnel.frameAt(state.coreParam);
         state.foldEpoch++; // suppress client interpolation across the dimension jump
 
-        ServerWorld coreWorld = player.getServer().getWorld(CORE_WORLD_KEY);
+        ServerWorld coreWorld = player.getEntityWorld().getServer().getWorld(CORE_WORLD_KEY);
         if (coreWorld == null) {
             GeoidMod.LOG.warn("Dimension '{}' is not loaded (missing datapack?); core traversal will "
                     + "run in place without the compressed shaft.", CORE_WORLD_KEY.getValue());
@@ -209,7 +209,7 @@ public final class GeoidServer {
             loader.requestArea(mc.x, mc.z, cfg.antipodePreloadRadius);
         }
 
-        ServerWorld overworld = player.getServer().getOverworld();
+        ServerWorld overworld = player.getEntityWorld().getServer().getOverworld();
 
         // Retreat: climbed back up past the entry threshold without reaching the centre -> pop back to
         // the real shaft they dug, instead of leaving them stranded in the compressed dimension.
@@ -291,7 +291,7 @@ public final class GeoidServer {
 
     private static boolean isDiggingDown(ServerPlayerEntity player) {
         // Heuristic: moving downward and looking steeply down. Refine with a block-break hook if desired.
-        return (player.getY() - player.prevY) < -0.05 && player.getPitch() > 45.0f;
+        return (player.getY() - player.lastY) < -0.05 && player.getPitch() > 45.0f;
     }
 
     private static Vec3 velocityOf(ServerPlayerEntity player) {
@@ -301,6 +301,6 @@ public final class GeoidServer {
 
     private static void setVelocity(ServerPlayerEntity player, Vec3 v) {
         player.setVelocity(v.x, v.y, v.z);
-        player.velocityModified = true;
+        player.velocityDirty = true;
     }
 }

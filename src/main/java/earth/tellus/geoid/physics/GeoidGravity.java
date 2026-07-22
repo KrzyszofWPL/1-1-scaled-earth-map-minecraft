@@ -51,7 +51,7 @@ public final class GeoidGravity {
     }
 
     private static PlayerGeoState lookupState(Entity self) {
-        if (self.getWorld().isClient) {
+        if (self.getEntityWorld().isClient()) {
             Function<Entity, PlayerGeoState> fn = clientLookup;
             return fn == null ? null : fn.apply(self);
         }
