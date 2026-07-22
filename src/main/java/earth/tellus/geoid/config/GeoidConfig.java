@@ -4,8 +4,10 @@ package earth.tellus.geoid.config;
  * Engine configuration. Kept as a tiny POJO with sane defaults so it can be loaded from JSON, set from
  * a data pack, or synced server -> client without dragging in a config framework.
  *
- * <p>All spatial values are in blocks; all toggles default to "on" so a fresh install behaves as a
- * spherical planet immediately.
+ * <p>All spatial values are in blocks. Spherical gravity and the core traversal default to "on" so a
+ * fresh install behaves as a spherical planet immediately; Geoid's own teleport-based circumnavigation
+ * folding defaults to "off" since Immersive Portals is expected to own world-edge wrapping instead (see
+ * {@link #enableCircumnavigation}).
  */
 public final class GeoidConfig {
 
@@ -14,8 +16,13 @@ public final class GeoidConfig {
     /** Minecraft Y that geodetic altitude 0 (reference sphere surface) maps to. Must match Tellus. */
     public double seaLevelY = 64.0;
 
-    /** Enable seamless east-west/pole circumnavigation folding. */
-    public boolean enableCircumnavigation = true;
+    /** Enable Geoid's own seamless east-west/pole circumnavigation folding (teleport-based). Off by
+     *  default: world-edge wrapping is expected to be handled by Immersive Portals' wrap portals
+     *  instead (see README), so Geoid doesn't also teleport the player and risk double-handling the
+     *  seam. Turn this back on (`/geoid circumnavigation true`) only on servers that don't run
+     *  Immersive Portals and still want the invisible-teleport fallback. Spherical gravity and the core
+     *  traversal ({@link #enableSphericalGravity}) are independent of this flag and stay on. */
+    public boolean enableCircumnavigation = false;
 
     /** Enable spherical gravity + antipodal core traversal. */
     public boolean enableSphericalGravity = true;

@@ -7,10 +7,15 @@ Companion mod dla **Fabric**, który zmienia płaską mapę 1:1 generowaną prze
 
 1. **Globalna cyrkumnawigacja** — idąc stale w jednym kierunku wzdłuż wielkiego koła, po przejściu
    pełnego obwodu Ziemi płynnie wracasz do punktu wyjścia (seamless coordinate folding + wrapping
-   chunków na szwie antymerydianu i biegunach).
+   chunków na szwie antymerydianu i biegunach). **Domyślnie wyłączone** (`enableCircumnavigation =
+   false`) — tym zajmuje się [Immersive Portals](#opcjonalna-integracja-z-immersive-portals-naprawdę-widoczny-szew)
+   swoimi portalami zawijającymi, więc Geoid nie dubluje tego własnym niewidocznym teleportem. Włącz
+   z powrotem (`/geoid circumnavigation true`) tylko na serwerach bez Immersive Portals.
 2. **Grawitacja sferyczna i kopanie do antypodów** — grawitacja wskazuje na środek kuli, a kopanie
    pionowo w dół prowadzi przez jądro planety, z **płynnym obrotem wektora grawitacji o 180°** w
-   środku, i wychodzi na powierzchni w antypodzie.
+   środku, i wychodzi na powierzchni w antypodzie. **Zawsze włączone domyślnie** — to jedyna część
+   „kulistej Ziemi”, której nie robi żaden inny mod (Immersive Portals daje portale, nie fizykę), więc
+   to jest właściwy rdzeń tego moda.
 
 ---
 
@@ -92,15 +97,9 @@ wizualnym — w kodzie oznaczone i obsłużone matematycznie, docelowo z czapą 
 
 ## Opcjonalna integracja z Immersive Portals (naprawdę widoczny szew)
 
-Domyślnie fold na antymerydianie jest **niewidocznym teleportem** (patrz wyżej) — celowo, bo teren po
-drugiej stronie jest identyczny, więc immersja polega na braku granicy, a nie na efekcie portalu.
-Jeśli jednak chcesz naprawdę *widzieć* drugą stronę mapy zanim w nią wejdziesz — z taką płynnością jak
-w modzie [Immersive Portals](https://github.com/iPortalTeam/ImmersivePortalsMod) — Geoid wykrywa go
-automatycznie (`ImmersivePortalsSupport.PRESENT`, `FabricLoader.isModLoaded("immersive_portals")`) i
-oddaje mu obsługę szwu wschód-zachód, zamiast teleportować gracza samodzielnie.
-
-**Immersive Portals ma gotową funkcję do dokładnie tego** — strefę zawijania świata
-(`WorldWrappingPortal`) — więc po stronie Geoid nie trzeba pisać żadnego kodu tworzącego portale.
+**Domyślnie (`enableCircumnavigation = false`) Geoid w ogóle nie teleportuje gracza na szwie** —
+zakładamy, że tym zajmuje się [Immersive Portals](https://github.com/iPortalTeam/ImmersivePortalsMod)
+swoją strefą zawijania świata, więc po stronie Geoid nie trzeba pisać żadnego kodu tworzącego portale.
 Wystarczy, że operator serwera **raz** wpisze w grze (poziom uprawnień 2, jak przy `/gamerule`):
 
 ```
@@ -109,16 +108,26 @@ Wystarczy, że operator serwera **raz** wpisze w grze (poziom uprawnień 2, jak 
 
 Współrzędne to narożniki prostokąta z `EquirectangularProjection`: X = ±`wrapPeriodX()/2`
 (~20 015 087 — dokładny szew antymerydianu) i Z znacznie szerzej niż realny limit biegunów
-(~10 007 543), żeby brzegi północ-południe tej strefy nigdy nie zostały fizycznie osiągnięte —
-Geoid i tak zawraca gracza na biegunie swoim własnym `foldPole` (odbicie + obrót o 180°, nie prosta
-pętla, więc nie pasuje do generycznego zawijania Immersive Portals). Realnie używane będą więc tylko
-portale wschód-zachód.
+(~10 007 543), żeby brzegi północ-południe tej strefy nigdy nie zostały fizycznie osiągnięte. Realnie
+używane będą więc tylko portale wschód-zachód; Immersive Portals nie ma odpowiednika dla bieguna
+(odbicie + obrót o 180°, nie prosta pętla), a ponieważ domyślnie cała cyrkumnawigacja Geoid jest
+wyłączona, **na biegunach nie ma żadnego domyślnego zabezpieczenia** — to świadomy kompromis: mod ma
+teraz skupiać się na fizyce jądra (patrz niżej), nie na obsłudze krawędzi mapy.
 
-Gdy `ImmersivePortalsSupport.PRESENT` jest `true`, `GeoidServer` przestaje sam teleportować gracza na
-szwie długości geograficznej (zrobiłby to podwójnie — portal już go przeniósł) i zamiast tego wykrywa
-skok pozycji o dokładnie jeden okres między tickami (`WorldFolding#reconcileExternalFold`), żeby
-`windowOffsetX` zostało w synchronizacji z tym, co faktycznie zrobił portal. Biegunowy fold działa jak
-zawsze, niezależnie od obecności moda.
+Jeśli wolisz zamiast tego **niewidoczny teleport Geoid** (identyczny teren po obu stronach szwu, więc
+gracz niczego nie zauważa) — np. na serwerze bez Immersive Portals — włącz z powrotem
+`/geoid circumnavigation true` (albo ustaw `enableCircumnavigation = true` w konfiguracji na starcie).
+Wtedy:
+
+- Gdy `ImmersivePortalsSupport.PRESENT` jest `true` (mod wykryty: `FabricLoader.isModLoaded
+  ("immersive_portals")`), `GeoidServer` mimo to **nie** teleportuje sam gracza na szwie długości
+  geograficznej (zrobiłby to podwójnie — portal już go przeniósł), tylko wykrywa skok pozycji o
+  dokładnie jeden okres między tickami (`WorldFolding#reconcileExternalFold`), żeby `windowOffsetX`
+  zostało w synchronizacji z tym, co faktycznie zrobił portal.
+- Gdy Immersive Portals nie jest obecny, `GeoidServer` sam wykonuje niewidoczny teleport na szwie
+  (`WorldFolding#foldLongitude`).
+- Biegunowy fold (`WorldFolding#foldPole`) zawsze jest obsługiwany przez Geoid, niezależnie od
+  obecności Immersive Portals — ten mod nie ma generycznego odpowiednika dla odbicia na biegunie.
 
 ---
 
