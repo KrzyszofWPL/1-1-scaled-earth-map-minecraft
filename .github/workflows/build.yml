@@ -34,6 +34,10 @@ jobs:
           javap -p -classpath "$MCJAR" net.minecraft.server.network.ServerPlayerEntity 2>&1 || true
           echo "=== ChunkTicketType ==="
           javap -p -classpath "$MCJAR" net.minecraft.server.world.ChunkTicketType 2>&1 || true
+          echo "=== ServerWorld ==="
+          javap -p -classpath "$MCJAR" net.minecraft.server.world.ServerWorld 2>&1 || true
+          echo "=== ServerChunkManager ==="
+          javap -p -classpath "$MCJAR" net.minecraft.server.world.ServerChunkManager 2>&1 || true
 
       - name: Run unit tests (pure spherical math)
         run: ./gradlew test --stacktrace
