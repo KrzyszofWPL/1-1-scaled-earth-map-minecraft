@@ -62,13 +62,3 @@ jar {
         rename { "${it}_${project.archivesBaseName}" }
     }
 }
-
-// TEMPORARY diagnostic task, removed once the 1.21.11 API port is done.
-tasks.register('dumpApi') {
-    doLast {
-        def mcJar = sourceSets.main.compileClasspath.files.find {
-            it.name.contains('minecraft') && it.name.endsWith('.jar')
-        }
-        println "MCJAR_PATH::${mcJar}"
-    }
-}
