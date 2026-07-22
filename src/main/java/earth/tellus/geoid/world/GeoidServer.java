@@ -8,6 +8,7 @@ import earth.tellus.geoid.GeoidMod;
 import earth.tellus.geoid.chunk.AntipodeChunkLoader;
 import earth.tellus.geoid.chunk.AntipodeChunkService;
 import earth.tellus.geoid.config.GeoidConfig;
+import earth.tellus.geoid.integration.ImmersivePortalsSupport;
 import earth.tellus.geoid.integration.TellusBridge;
 import earth.tellus.geoid.integration.TellusBridges;
 import earth.tellus.geoid.math.Geodetic;
@@ -132,22 +133,37 @@ public final class GeoidServer {
         state.geodetic = folding.mcToGeodetic(player.getX(), player.getY(), player.getZ());
 
         if (cfg.enableCircumnavigation) {
-            // 2. Pre-generate the seam bridge if we are approaching the antimeridian.
-            double bridgeMapX = folding.seamBridgeTargets(player.getX());
-            if (!Double.isNaN(bridgeMapX)) {
-                loader.requestArea(bridgeMapX, player.getZ(), cfg.seamOverlapChunks);
+            if (ImmersivePortalsSupport.PRESENT) {
+                // A real, see-through Immersive Portals wrap portal (set up by the server operator via
+                // /portal global create_outward_wrapping — see the README) already relocated the player
+                // physically if they just crossed the seam; teleporting them again here would double-move
+                // them. Just detect that jump and keep windowOffsetX in sync with it.
+                if (!Double.isNaN(state.lastMcX) && folding.reconcileExternalFold(state.lastMcX, player.getX())) {
+                    state.geodetic = folding.mcToGeodetic(player.getX(), player.getY(), player.getZ());
+                    state.foldEpoch++; // still suppress client interpolation across the jump
+                }
+            } else {
+                // 2. Pre-generate the seam bridge if we are approaching the antimeridian.
+                double bridgeMapX = folding.seamBridgeTargets(player.getX());
+                if (!Double.isNaN(bridgeMapX)) {
+                    loader.requestArea(bridgeMapX, player.getZ(), cfg.seamOverlapChunks);
+                }
+
+                // 3. Fold longitude, teleporting seamlessly if needed.
+                WorldFolding.FoldResult lon = folding.foldLongitude(player.getX(), player.getZ());
+                if (lon.teleported) {
+                    applyFold(player, state, lon.newMinecraftX, player.getY(), lon.newMinecraftZ, lon.bearingDelta);
+                }
             }
 
-            // 3. Fold longitude, then pole, teleporting seamlessly if needed.
-            WorldFolding.FoldResult lon = folding.foldLongitude(player.getX(), player.getZ());
-            if (lon.teleported) {
-                applyFold(player, state, lon.newMinecraftX, player.getY(), lon.newMinecraftZ, lon.bearingDelta);
-            }
+            // Pole seam is a reflect-and-flip, not a plain loop, so it doesn't fit Immersive Portals'
+            // generic wrapping-zone feature — always Geoid's own invisible teleport, regardless of (3).
             WorldFolding.FoldResult pole = folding.foldPole(player.getX(), player.getZ());
             if (pole.teleported) {
                 applyFold(player, state, pole.newMinecraftX, player.getY(), pole.newMinecraftZ, pole.bearingDelta);
             }
         }
+        state.lastMcX = player.getX();
 
         // 4. Core-entry detection: sustained straight-down below the local surface threshold.
         if (cfg.enableSphericalGravity && state.geodetic.altitude <= -cfg.coreEntryDepth && isDiggingDown(player)) {

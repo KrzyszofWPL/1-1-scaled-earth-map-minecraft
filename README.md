@@ -90,6 +90,38 @@ wizualnym — w kodzie oznaczone i obsłużone matematycznie, docelowo z czapą 
 
 ---
 
+## Opcjonalna integracja z Immersive Portals (naprawdę widoczny szew)
+
+Domyślnie fold na antymerydianie jest **niewidocznym teleportem** (patrz wyżej) — celowo, bo teren po
+drugiej stronie jest identyczny, więc immersja polega na braku granicy, a nie na efekcie portalu.
+Jeśli jednak chcesz naprawdę *widzieć* drugą stronę mapy zanim w nią wejdziesz — z taką płynnością jak
+w modzie [Immersive Portals](https://github.com/iPortalTeam/ImmersivePortalsMod) — Geoid wykrywa go
+automatycznie (`ImmersivePortalsSupport.PRESENT`, `FabricLoader.isModLoaded("immersive_portals")`) i
+oddaje mu obsługę szwu wschód-zachód, zamiast teleportować gracza samodzielnie.
+
+**Immersive Portals ma gotową funkcję do dokładnie tego** — strefę zawijania świata
+(`WorldWrappingPortal`) — więc po stronie Geoid nie trzeba pisać żadnego kodu tworzącego portale.
+Wystarczy, że operator serwera **raz** wpisze w grze (poziom uprawnień 2, jak przy `/gamerule`):
+
+```
+/portal global create_outward_wrapping -20015087 -15000000 20015087 15000000
+```
+
+Współrzędne to narożniki prostokąta z `EquirectangularProjection`: X = ±`wrapPeriodX()/2`
+(~20 015 087 — dokładny szew antymerydianu) i Z znacznie szerzej niż realny limit biegunów
+(~10 007 543), żeby brzegi północ-południe tej strefy nigdy nie zostały fizycznie osiągnięte —
+Geoid i tak zawraca gracza na biegunie swoim własnym `foldPole` (odbicie + obrót o 180°, nie prosta
+pętla, więc nie pasuje do generycznego zawijania Immersive Portals). Realnie używane będą więc tylko
+portale wschód-zachód.
+
+Gdy `ImmersivePortalsSupport.PRESENT` jest `true`, `GeoidServer` przestaje sam teleportować gracza na
+szwie długości geograficznej (zrobiłby to podwójnie — portal już go przeniósł) i zamiast tego wykrywa
+skok pozycji o dokładnie jeden okres między tickami (`WorldFolding#reconcileExternalFold`), żeby
+`windowOffsetX` zostało w synchronizacji z tym, co faktycznie zrobił portal. Biegunowy fold działa jak
+zawsze, niezależnie od obecności moda.
+
+---
+
 ## Jak działa kopanie do antypodów (tunel jądra)
 
 `CoreTunnel` modeluje przejście w dwóch skalach jednocześnie:

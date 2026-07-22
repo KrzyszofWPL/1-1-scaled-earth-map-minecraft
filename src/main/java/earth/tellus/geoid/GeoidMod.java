@@ -1,6 +1,7 @@
 package earth.tellus.geoid;
 
 import earth.tellus.geoid.command.GeoidCommand;
+import earth.tellus.geoid.integration.ImmersivePortalsSupport;
 import earth.tellus.geoid.net.GeoStatePayload;
 import earth.tellus.geoid.world.GeoidServer;
 import net.fabricmc.api.ModInitializer;
@@ -46,6 +47,11 @@ public final class GeoidMod implements ModInitializer {
         // Drop per-player spherical state when they leave.
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) ->
                 GeoidServer.get().forget(handler.getPlayer().getUuid()));
+
+        if (ImmersivePortalsSupport.PRESENT) {
+            LOG.info("Immersive Portals detected: longitude seam handed off to it once a wrap portal "
+                    + "is set up (see README) — run '/portal global create_outward_wrapping ...' once.");
+        }
 
         LOG.info("Geoid spherical-earth engine initialised (companion to Tellus).");
     }

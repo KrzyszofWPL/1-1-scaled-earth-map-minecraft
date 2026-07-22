@@ -55,6 +55,13 @@ public final class PlayerGeoState {
     /** Bumps every time the server rebases/folds this player, so the client can detect teleports. */
     public long foldEpoch;
 
+    /**
+     * The player's Minecraft X at the end of the previous tick. Used only to detect an Immersive
+     * Portals wrap-portal crossing (see {@link WorldFolding#reconcileExternalFold}) by spotting a
+     * one-period jump between ticks; {@link Double#NaN} until the first tick has run once.
+     */
+    public double lastMcX = Double.NaN;
+
     public PlayerGeoState(Geodetic geodetic) {
         this.geodetic = geodetic;
     }
