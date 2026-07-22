@@ -12,9 +12,15 @@ import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.text.Text;
 
 /**
- * {@code /geoid} — OP-only (permission level 2, same bar as {@code /gamerule}) runtime configuration
- * for the spherical-earth engine. Lets {@link GeoidConfig} toggles/tunables be changed live from in
- * game instead of requiring a source edit and a server restart.
+ * {@code /geoid} — OP-only (gamemasters permission check, same bar as {@code /gamerule}) runtime
+ * configuration for the spherical-earth engine. Lets {@link GeoidConfig} toggles/tunables be changed
+ * live from in game instead of requiring a source edit and a server restart.
+ *
+ * <p>Version-sensitive: 1.21.11 replaced the old {@code ServerCommandSource#hasPermissionLevel(int)}
+ * check with a structured permission-requirement system ({@code net.minecraft.command.permission}).
+ * {@link CommandManager#requirePermissionLevel} adapts one of {@link CommandManager}'s standing
+ * {@code *_CHECK} constants into the predicate {@code requires()} expects — this is the same helper
+ * vanilla uses for every op-gated command (e.g. {@code /gamerule}).
  */
 public final class GeoidCommand {
 
@@ -23,7 +29,7 @@ public final class GeoidCommand {
 
     public static void register(CommandDispatcher<ServerCommandSource> dispatcher) {
         dispatcher.register(CommandManager.literal("geoid")
-                .requires(source -> source.hasPermissionLevel(2))
+                .requires(CommandManager.requirePermissionLevel(CommandManager.GAMEMASTERS_CHECK))
                 .then(CommandManager.literal("status").executes(GeoidCommand::status))
                 .then(boolToggle("circumnavigation", "enableCircumnavigation",
                         cfg -> cfg.enableCircumnavigation, (cfg, v) -> cfg.enableCircumnavigation = v))
