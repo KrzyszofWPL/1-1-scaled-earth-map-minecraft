@@ -23,7 +23,7 @@ a nie wbrew nim:
 |---|---|---|
 | Siatka wokseli jest **płaska i osiowo-równoległa** — nie da się jej zakrzywić | Nie zrobimy dosłownie „chodzenia po kuli” z zakrzywionym horyzontem terenu | Traktujemy kulę jako **rozmaitość współrzędnych (atlas kart)** rzutowaną na płaską siatkę; iluzję domykamy manipulacją układem odniesienia gracza i wektorem grawitacji |
 | Grawitacja to zaszyty skalar `velocity.y -= 0.08` | Brak natywnej grawitacji kierunkowej | Mixin do `Entity#applyGravity` + własny integrator (`SphericalPhysics`, `GeoidGravity`) |
-| Zasięg współrzędnych ±30 mln, wysokość Y ≈ 384 bloki | Średnica Ziemi (12,74 mln bloków) nie zmieści się w osi Y | **Tunel jądra** (`CoreTunnel`) w skali podwójnej: powłoki powierzchniowe 1:1, wnętrze skompresowane; fizyka liczona z prawdziwego `s` |
+| Nawet największy legalny wymiar (`min_y=-2032, height=4064`) to ~4064 bloków — a średnica Ziemi to 12,74 mln bloków | Nie da się przejść jądra 1:1 w żadnym pojedynczym wymiarze Minecrafta | **Tunel jądra** (`CoreTunnel`) w skali podwójnej + osobny wymiar `geoid:core` (lity szyb skalny, wysokość dobrana tak, by realny przelot się zmieścił): powłoki powierzchniowe 1:1, wnętrze skompresowane; fizyka liczona z prawdziwego `s`, odtwarzanego co tick z pozycji w tym wymiarze |
 | Obwód Ziemi (~40 mln) > pełny zakres jednej osi | Nie da się „przejść” przez antymerydian po płaskiej mapie | **Floating origin** + fold o dokładnie jeden okres (`WorldFolding`); teren jest okresowy → teleport niewidoczny |
 | Kamera zna tylko yaw+pitch | Brak roll horyzontu przy przejściu przez jądro | Mixin do `Camera#update` (`CameraRollMixin`) z interpolacją kwaternionową |
 
@@ -97,8 +97,25 @@ wizualnym — w kodzie oznaczone i obsłużone matematycznie, docelowo z czapą 
 - **Skala fizyki (uczciwa):** parametr `s ∈ [0, 2R]` wzdłuż prawdziwej średnicy. Grawitacja,
   nieważkość w środku i pozycja geodezyjna liczone są z `s` na liczbach rzeczywistych.
 - **Skala renderu (skompresowana):** dwie cienkie powłoki powierzchniowe (prawdziwy teren Tellusa,
-  po ~512 bloków) są 1:1, a całe wnętrze płaszcza/jądra jest skompresowane do stałej wysokości
-  wizualnej (`sToVisualDepth` / `visualDepthToS`).
+  po `SHELL_DEPTH` = 512 bloków) są 1:1, a całe wnętrze płaszcza/jądra jest skompresowane do stałej
+  wysokości wizualnej (`sToVisualDepth` / `visualDepthToS`).
+
+**Gdzie fizycznie stoi gracz podczas przejścia — wymiar `geoid:core`.** Minecrafta nie da się rozciągnąć
+poza ok. 4064 bloków wysokości w jednym wymiarze (limit formatu chunków), a sama średnica Ziemi to
+~12,74 mln bloków — więc przejście przez jądro **nie dzieje się w Overworldzie**. Po przekopaniu
+`coreEntryDepth` (domyślnie 480 bloków) gracz jest teleportowany (`ServerPlayerEntity#teleport`, bez
+ekranu ładowania) do osobnego, dołączonego do moda wymiaru `geoid:core`
+(`data/geoid/dimension/core.json` + `dimension_type/core.json`, wysokość `min_y=-2032, height=4064`) —
+w pełni skonstruowanego, litego szybu skalnego (deepslate/blackstone, z jaśniejącym pasem glowstone w
+połowie drogi), każdy gracz w swojej własnej kolumnie wyliczonej z jego rzeczywistego punktu wejścia
+(`lon×1000, lat×1000`), żeby dwie osoby kopiące w różnych miejscach na Ziemi nie zderzyły się pod
+ziemią. Realna pozycja `s` jest odtwarzana co tick wprost z Y gracza w tym wymiarze przez
+`visualDepthToS` (`SphericalPhysics.advanceTraversal`) — nie integrowana z deltą ruchu, więc kompresja
+faktycznie działa: jeden blok wykopany głęboko w środku odpowiada tysiącom bloków prawdziwej średnicy.
+Po przekroczeniu progu `DIAMETER - coreEntryDepth` gracz wraca do Overworldu na antypodach, **na
+rzeczywistą wysokość terenu Tellusa** odczytaną z heightmapy już wcześniej doczytanego chunka
+(`realAntipodalSurface`) — a nie na sztywny poziom morza — żeby nie wylądować zamurowany w górze ani
+zawieszony wysoko nad dnem oceanu.
 
 **Obrót o 180°:** po bliższej stronie środek jest pod graczem → grawitacja `-Y` (jak vanilla). Za
 środkiem środek jest nad graczem → grawitacja `+Y`. Zamiast zostawić gracza „do góry nogami”,
@@ -157,27 +174,41 @@ config/ GeoidConfig             — konfiguracja
 mixin/ EntityGravityMixin        — przejęcie grawitacji (Entity#applyGravity)
        CameraRollMixin           — roll horyzontu (Camera#update)
 GeoidMod / client.GeoidClient    — entrypointy Fabric
+
+resources/data/geoid/
+  dimension_type/core.json       — geoid:core, min_y=-2032 height=4064 (max legalna wysokość MC)
+  dimension/core.json            — generator typu flat: lity szyb deepslate/blackstone/glowstone
 ```
 
 ---
 
 ## Wersje i budowanie
 
-Celowany stack: **Fabric / Yarn, Minecraft 1.21.3, Java 21** (patrz `gradle.properties`). Warstwa
-matematyczna jest niezależna od wersji i objęta testami JUnit (`./gradlew test`). Warstwy dotykające
-wnętrzności MC (mixiny, tickety chunków, sieć) są oznaczone komentarzami w miejscach zależnych od
-mapowań — przy zmianie wersji poprawia się tylko te punkty, logika zostaje.
+Celowany stack: **Fabric / Yarn, Minecraft 1.21.11, Java 21** (patrz `gradle.properties`). Warstwa
+matematyczna i fizyczna (`math/`, `world.CoreTunnel`, `world.PlayerGeoState`, `physics.SphericalPhysics`)
+jest niezależna od wersji, wolna od zależności na klasy Minecrafta i objęta testami JUnit
+(`./gradlew test`) — w tym `SphericalPhysicsTest`, który przypina dokładnie kompresję szybu jądra
+(jeden blok w pobliżu wejścia = jedna jednostka `s`, jeden blok głęboko w środku = tysiące jednostek
+`s`). Warstwy dotykające wnętrzności MC (mixiny, tickety chunków, sieć, teleport międzywymiarowy) są
+oznaczone komentarzami w miejscach zależnych od mapowań — przy zmianie wersji poprawia się tylko te
+punkty, logika zostaje.
 
 **Status builda:** pipeline CI (`.github/workflows/build.yml`) buduje mod na runnerach GitHub Actions
-i jest **zielony** — `./gradlew build` kompiluje cały kod (w tym oba mixiny i warstwę sieci/chunków)
-przeciw Minecraft 1.21.3 przez Fabric Loom, przechodzi testy jednostkowe i produkuje `geoid-*.jar`
-(artefakt `geoid-jars`). To potwierdza poprawność mapowań i wersji. **Uwaga:** zielony build oznacza
-„kompiluje się, testy przechodzą, jar powstaje" — nie zastępuje testów w żywej grze (faktyczne
-zachowanie mixinów w runtime, feel seamless-teleportu, preload chunków pod obciążeniem).
+przeciw Minecraft 1.21.11 przez Fabric Loom, przechodzi testy jednostkowe i produkuje `geoid-*.jar`
+(artefakt `geoid-jars`) — sprawdź aktualny status pod odznaką na górze tego pliku. **Uwaga:** zielony
+build oznacza „kompiluje się, testy przechodzą, jar powstaje" — nie zastępuje testów w żywej grze
+(faktyczne zachowanie mixinów w runtime, feel seamless-teleportu i teleportu międzywymiarowego,
+preload chunków pod obciążeniem).
 
-`CameraRollMixin` to najbardziej wrażliwy na wersję hak (nazwy pól `Camera`), a `EntityGravityMixin`
-celuje w `applyGravity()` (MC 1.21.3+); dla starszych wersji retarget do `LivingEntity#travel`.
+`CameraRollMixin` to najbardziej wrażliwy na wersję hak (nazwy pól `Camera`), `EntityGravityMixin`
+celuje w `applyGravity()` (MC 1.21.3+), a `GeoidServer#teleportCrossDimension` celuje w
+`ServerPlayerEntity#teleport(ServerWorld, double, double, double, Set, float, float, boolean)`
+(potwierdzone dla Yarn 1.21.11) — dla starszych/nowszych wersji to jedyne trzy miejsca do poprawy.
 
-> Uwaga: to jest kompletna architektura i logika referencyjna. Reflektywne wiązanie z Tellusem
-> (`TellusBridges.tryBindTellus`) jest celowo zaślepione do fallbacku, dopóki Tellus nie wystawi
-> stabilnego API projekcji — wtedy podmienia się jedną metodę.
+> Uwaga: reflektywne wiązanie z Tellusem (`TellusBridges.tryBindTellus`) jest celowo zaślepione do
+> fallbacku, dopóki Tellus nie wystawi stabilnego API projekcji — wtedy podmienia się jedną metodę.
+> W praktyce nie blokuje to poprawności: obie strony i tak zakładają tę samą, jedyną sensowną
+> projekcję dla mapy 1:1 (equirectangular), a jedyne miejsce, gdzie realny teren Tellusa naprawdę się
+> liczy — bezpieczne lądowanie na antypodach — czyta go wprost z heightmapy świata
+> (`GeoidServer#realAntipodalSurface`), więc działa niezależnie od tego, czy refleksja kiedykolwiek
+> zostanie dopięta.

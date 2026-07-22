@@ -1,0 +1,19 @@
+{
+  "type": "geoid:core",
+  "generator": {
+    "type": "minecraft:flat",
+    "settings": {
+      "biome": "minecraft:the_void",
+      "lakes": false,
+      "features": false,
+      "layers": [
+        { "block": "minecraft:deepslate", "height": 1700 },
+        { "block": "minecraft:blackstone", "height": 60 },
+        { "block": "minecraft:glowstone", "height": 6 },
+        { "block": "minecraft:blackstone", "height": 60 },
+        { "block": "minecraft:deepslate", "height": 1706 }
+      ],
+      "structure_overrides": []
+    }
+  }
+}

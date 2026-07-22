@@ -4,18 +4,27 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
+import earth.tellus.geoid.GeoidMod;
 import earth.tellus.geoid.chunk.AntipodeChunkLoader;
 import earth.tellus.geoid.chunk.AntipodeChunkService;
 import earth.tellus.geoid.config.GeoidConfig;
 import earth.tellus.geoid.integration.TellusBridge;
 import earth.tellus.geoid.integration.TellusBridges;
 import earth.tellus.geoid.math.Geodetic;
+import earth.tellus.geoid.math.SphereMath;
 import earth.tellus.geoid.math.Vec3;
 import earth.tellus.geoid.net.GeoStatePayload;
 import earth.tellus.geoid.physics.SphericalPhysics;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import net.minecraft.registry.RegistryKey;
+import net.minecraft.registry.RegistryKeys;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
+import net.minecraft.util.Identifier;
+import net.minecraft.world.Heightmap;
+import net.minecraft.world.World;
+
+import java.util.Set;
 
 /**
  * Server-side orchestration: one place that turns the pure spherical logic into actual moves on the
@@ -39,6 +48,17 @@ import net.minecraft.server.world.ServerWorld;
 public final class GeoidServer {
 
     private static final GeoidServer INSTANCE = new GeoidServer();
+
+    /** The compressed-interior dimension a core traversal moves the player through (see data/geoid). */
+    private static final RegistryKey<World> CORE_WORLD_KEY =
+            RegistryKey.of(RegistryKeys.WORLD, Identifier.of("geoid", "core"));
+
+    /**
+     * Y inside {@code geoid:core} where a traversal begins: the player stands on the freshly exposed
+     * rock face (solid block at Y-1, air at Y) with a full {@link CoreTunnel#visualShaftHeight()} of
+     * headroom below down to the dimension floor, well inside its {@code min_y=-2032} floor.
+     */
+    private static final double CORE_DIM_ENTRY_Y = 1500.0;
 
     public static GeoidServer get() {
         return INSTANCE;
@@ -72,12 +92,19 @@ public final class GeoidServer {
         });
     }
 
-    /** Called once per player per server tick (from a Fabric ServerTickEvents hook). */
+    /**
+     * Called once per player per server tick (from a Fabric ServerTickEvents hook).
+     *
+     * <p>Folding and the antipode loader are always keyed to the Overworld, never to whichever world the
+     * player currently occupies: during a core traversal the player physically stands in the compressed
+     * {@code geoid:core} dimension, but the geodetic <-> Minecraft mapping only ever means something for
+     * the Overworld that Tellus actually paints terrain on.
+     */
     public void tickPlayer(ServerPlayerEntity player) {
         GeoidConfig cfg = GeoidConfig.get();
-        ServerWorld world = (ServerWorld) player.getWorld();
-        WorldFolding folding = foldingFor(world);
-        AntipodeChunkLoader loader = loaderFor(world);
+        ServerWorld overworld = player.getServer().getOverworld();
+        WorldFolding folding = foldingFor(overworld);
+        AntipodeChunkLoader loader = loaderFor(overworld);
         PlayerGeoState state = stateFor(player, folding);
 
         state.bearingRad = Math.toRadians(player.getYaw()); // yaw is clockwise-from-south; adjust in mapper
@@ -147,6 +174,20 @@ public final class GeoidServer {
         state.coreParam = -state.geodetic.altitude; // depth already dug becomes initial s
         state.geodetic = tunnel.geodeticAt(state.coreParam);
         state.frame = tunnel.frameAt(state.coreParam);
+        state.foldEpoch++; // suppress client interpolation across the dimension jump
+
+        ServerWorld coreWorld = player.getServer().getWorld(CORE_WORLD_KEY);
+        if (coreWorld == null) {
+            GeoidMod.LOG.warn("Dimension '{}' is not loaded (missing datapack?); core traversal will "
+                    + "run in place without the compressed shaft.", CORE_WORLD_KEY.getValue());
+            return;
+        }
+        // Each traversal gets its own column, keyed off the real-world entry point so two players
+        // digging in from different places on Earth never collide underground.
+        double shaftX = Math.floor(origin.lonDeg() * 1000.0);
+        double shaftZ = Math.floor(origin.latDeg() * 1000.0);
+        double y = coreDimensionY(tunnel, state.coreParam, cfg.coreEntryDepth);
+        teleportCrossDimension(player, coreWorld, shaftX, y, shaftZ, player.getYaw(), player.getPitch());
     }
 
     private void tickCore(ServerPlayerEntity player, WorldFolding folding, AntipodeChunkLoader loader,
@@ -158,30 +199,67 @@ public final class GeoidServer {
         }
 
         double prevParam = state.coreParam;
-        double realizedDy = player.getY() - player.prevY; // MC-facing: realised vertical move this tick
-        SphericalPhysics.advanceTraversal(state, tunnel, realizedDy);
+        SphericalPhysics.advanceTraversal(state, tunnel, player.getY(), CORE_DIM_ENTRY_Y, cfg.coreEntryDepth);
 
         // Pre-load the antipodal surface as soon as we pass the centre, so the exit never shows a hole.
-        boolean crossedCentre = prevParam <= earth.tellus.geoid.math.SphereMath.EARTH_RADIUS
-                && state.coreParam > earth.tellus.geoid.math.SphereMath.EARTH_RADIUS;
+        boolean crossedCentre = prevParam <= SphereMath.EARTH_RADIUS && state.coreParam > SphereMath.EARTH_RADIUS;
         if (crossedCentre) {
             Geodetic anti = tunnel.antipode();
             Vec3 mc = folding.geodeticToMc(anti);
             loader.requestArea(mc.x, mc.z, cfg.antipodePreloadRadius);
         }
 
-        // Exit: reached the antipodal surface. Re-anchor the player onto real antipode terrain.
-        if (state.coreParam >= earth.tellus.geoid.math.SphereMath.DIAMETER - 1.0) {
-            Geodetic anti = tunnel.antipode().withAltitude(0.0);
-            Vec3 mc = folding.geodeticToMc(anti);
-            player.networkHandler.requestTeleport(mc.x, mc.y, mc.z, player.getYaw(), player.getPitch());
-            state.geodetic = anti;
-            state.phase = PlayerGeoState.Phase.SURFACE;
-            state.coreParam = 0;
-            state.frame = earth.tellus.geoid.math.Quat.IDENTITY;
-            state.foldEpoch++;
-            traversals.remove(player.getUuid());
+        ServerWorld overworld = player.getServer().getOverworld();
+
+        // Retreat: climbed back up past the entry threshold without reaching the centre -> pop back to
+        // the real shaft they dug, instead of leaving them stranded in the compressed dimension.
+        if (!tunnel.pastCentre(prevParam) && state.coreParam < cfg.coreEntryDepth - 4.0) {
+            exitToOverworld(player, folding, state, tunnel.origin.withAltitude(-cfg.coreEntryDepth), overworld);
+            return;
         }
+
+        // Exit: within one shell's depth of the antipodal surface. Re-anchor onto real antipode terrain
+        // (already generated by the antipode preloader above) rather than modelling the last stretch of
+        // 1:1 digging inside the compressed dimension, where there is no real terrain to land safely on.
+        if (state.coreParam >= SphereMath.DIAMETER - cfg.coreEntryDepth) {
+            Geodetic landing = realAntipodalSurface(overworld, folding, tunnel.antipode());
+            exitToOverworld(player, folding, state, landing, overworld);
+        }
+    }
+
+    /**
+     * The antipode's real ground level, read from the Overworld's own heightmap rather than assumed to
+     * be sea level. The antipode preloader already forced full generation of this column when the
+     * traversal crossed the centre, so the heightmap is real Tellus terrain, not a guess — without this
+     * a player could pop out entombed in a mountain (real ground above sea level) or stranded high over
+     * an ocean floor (real ground below it).
+     */
+    private static Geodetic realAntipodalSurface(ServerWorld overworld, WorldFolding folding, Geodetic anti) {
+        Vec3 mapPos = folding.geodeticToMc(anti.withAltitude(0.0));
+        int blockX = (int) Math.floor(mapPos.x);
+        int blockZ = (int) Math.floor(mapPos.z);
+        int topY = overworld.getTopY(Heightmap.Type.WORLD_SURFACE, blockX, blockZ);
+        double altitude = topY - TellusBridges.active().seaLevelY();
+        return anti.withAltitude(altitude);
+    }
+
+    private void exitToOverworld(ServerPlayerEntity player, WorldFolding folding, PlayerGeoState state,
+                                 Geodetic landingSpot, ServerWorld overworld) {
+        Vec3 mc = folding.geodeticToMc(landingSpot);
+        teleportCrossDimension(player, overworld, mc.x, mc.y, mc.z, player.getYaw(), player.getPitch());
+        state.geodetic = landingSpot;
+        state.phase = PlayerGeoState.Phase.SURFACE;
+        state.coreParam = 0;
+        state.frame = earth.tellus.geoid.math.Quat.IDENTITY;
+        state.foldEpoch++;
+        traversals.remove(player.getUuid());
+    }
+
+    /** Maps a traversal parameter to the player's Y inside {@code geoid:core} (see {@link #CORE_DIM_ENTRY_Y}). */
+    private static double coreDimensionY(CoreTunnel tunnel, double coreParam, double coreEntryDepth) {
+        double visualAtEntry = tunnel.sToVisualDepth(coreEntryDepth);
+        double visualNow = tunnel.sToVisualDepth(coreParam);
+        return CORE_DIM_ENTRY_Y - (visualNow - visualAtEntry);
     }
 
     public PlayerGeoState peekState(UUID id) {
@@ -198,6 +276,18 @@ public final class GeoidServer {
     }
 
     // ------------------------------------------------------------------ MC-facing shims
+
+    /**
+     * Moves a player to an absolute position, possibly in a different dimension.
+     *
+     * <p>Version-sensitive: targets {@code ServerPlayerEntity#teleport(ServerWorld, double, double,
+     * double, Set, float, float, boolean)} (MC 1.21.4+ Yarn; confirmed present under 1.21.11). An empty
+     * flag set means every coordinate/angle is absolute, never relative to the player's current world.
+     */
+    private static void teleportCrossDimension(ServerPlayerEntity player, ServerWorld target,
+                                               double x, double y, double z, float yaw, float pitch) {
+        player.teleport(target, x, y, z, Set.of(), yaw, pitch, true);
+    }
 
     private static boolean isDiggingDown(ServerPlayerEntity player) {
         // Heuristic: moving downward and looking steeply down. Refine with a block-break hook if desired.
