@@ -29,6 +29,7 @@ a nie wbrew nim:
 | Siatka wokseli jest **płaska i osiowo-równoległa** — nie da się jej zakrzywić | Nie zrobimy dosłownie „chodzenia po kuli” z zakrzywionym horyzontem terenu | Traktujemy kulę jako **rozmaitość współrzędnych (atlas kart)** rzutowaną na płaską siatkę; iluzję domykamy manipulacją układem odniesienia gracza i wektorem grawitacji |
 | Grawitacja to zaszyty skalar `velocity.y -= 0.08` | Brak natywnej grawitacji kierunkowej | Mixin do `Entity#applyGravity` + własny integrator (`SphericalPhysics`, `GeoidGravity`) |
 | Nawet największy legalny wymiar (`min_y=-2032, height=4064`) to ~4064 bloków — a średnica Ziemi to 12,74 mln bloków | Nie da się przejść jądra 1:1 w żadnym pojedynczym wymiarze Minecrafta | **Tunel jądra** (`CoreTunnel`) w skali podwójnej + osobny wymiar `geoid:core` (lity szyb skalny, wysokość dobrana tak, by realny przelot się zmieścił): powłoki powierzchniowe 1:1, wnętrze skompresowane; fizyka liczona z prawdziwego `s`, odtwarzanego co tick z pozycji w tym wymiarze |
+| Zwykły Overworld ma `min_y=-64` — od domyślnego poziomu morza (Y=64) w dół jest tylko 128 bloków do bedrocku | Gdyby `coreEntryDepth` (próg wejścia do jądra) był ustawiony na więcej niż ~128, gracz uderzy w bedrock/void Overworldu, zanim `geoid:core` w ogóle się włączy — funkcja martwa mimo że kod działa | `coreEntryDepth` domyślnie **100** (patrz `GeoidConfig`), bezpiecznie poniżej granicy 128 i ponad losową warstwą bedrocku (~Y −59…−64) |
 | Obwód Ziemi (~40 mln) > pełny zakres jednej osi | Nie da się „przejść” przez antymerydian po płaskiej mapie | **Floating origin** + fold o dokładnie jeden okres (`WorldFolding`); teren jest okresowy → teleport niewidoczny |
 | Kamera zna tylko yaw+pitch | Brak roll horyzontu przy przejściu przez jądro | Mixin do `Camera#update` (`CameraRollMixin`) z interpolacją kwaternionową |
 
@@ -143,9 +144,10 @@ Wtedy:
 
 **Gdzie fizycznie stoi gracz podczas przejścia — wymiar `geoid:core`.** Minecrafta nie da się rozciągnąć
 poza ok. 4064 bloków wysokości w jednym wymiarze (limit formatu chunków), a sama średnica Ziemi to
-~12,74 mln bloków — więc przejście przez jądro **nie dzieje się w Overworldzie**. Po przekopaniu
-`coreEntryDepth` (domyślnie 480 bloków) gracz jest teleportowany (`ServerPlayerEntity#teleport`, bez
-ekranu ładowania) do osobnego, dołączonego do moda wymiaru `geoid:core`
+~12,74 mln bloków — więc przejście przez jądro **nie dzieje się w Overworldzie**. Gdy gracz zejdzie
+`coreEntryDepth` bloków (domyślnie 100) poniżej `seaLevelY` — próg liczony od poziomu morza, nie od
+tego, gdzie faktycznie zaczął kopać — jest teleportowany (`ServerPlayerEntity#teleport`, bez ekranu
+ładowania) do osobnego, dołączonego do moda wymiaru `geoid:core`
 (`data/geoid/dimension/core.json` + `dimension_type/core.json`, wysokość `min_y=-2032, height=4064`) —
 w pełni skonstruowanego, litego szybu skalnego (deepslate/blackstone, z jaśniejącym pasem glowstone w
 połowie drogi), każdy gracz w swojej własnej kolumnie wyliczonej z jego rzeczywistego punktu wejścia

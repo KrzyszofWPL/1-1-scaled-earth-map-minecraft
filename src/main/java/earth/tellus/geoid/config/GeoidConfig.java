@@ -36,8 +36,19 @@ public final class GeoidConfig {
     /** Max chunk tickets the antipode loader may issue per server tick (TPS guard). */
     public int chunkBudgetPerTick = 8;
 
-    /** Depth below the local surface at which straight-down digging enters a core traversal. */
-    public double coreEntryDepth = 480.0;
+    /**
+     * Trigger depth for a core traversal, in blocks below {@link #seaLevelY} (<em>not</em> below
+     * wherever the player started digging — the check is {@code mcY <= seaLevelY - coreEntryDepth}).
+     *
+     * <p>Must stay well under how far a player can actually dig below sea level in whatever dimension
+     * they're standing in, or the core traversal can never trigger at all. A stock 1.21.1 Overworld
+     * (`min_y=-64`) only has 128 blocks below the default sea level of 64 before hitting the bedrock
+     * floor — nowhere near Earth's real radius, hence the whole point of this mod. 100 leaves margin
+     * above the randomized bedrock layer (~Y -59..-64) so the switch into {@code geoid:core} always
+     * lands on solid, breakable rock. Raise this only on servers whose Overworld dimension type has
+     * been extended deeper than vanilla.
+     */
+    public double coreEntryDepth = 100.0;
 
     /** If false, past-centre gravity pulls back to the centre (realistic); if true, it re-anchors "down"
      *  toward the antipodal surface so players fall out the far side. Defaults to the realistic model. */

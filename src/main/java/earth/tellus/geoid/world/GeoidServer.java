@@ -165,7 +165,8 @@ public final class GeoidServer {
         }
         state.lastMcX = player.getX();
 
-        // 4. Core-entry detection: sustained straight-down below the local surface threshold.
+        // 4. Core-entry detection: sustained straight-down digging past coreEntryDepth blocks below sea
+        //    level (not below wherever the player started digging — see GeoidConfig#coreEntryDepth).
         if (cfg.enableSphericalGravity && state.geodetic.altitude <= -cfg.coreEntryDepth && isDiggingDown(player)) {
             beginCoreTraversal(player, folding, state, cfg);
         }
