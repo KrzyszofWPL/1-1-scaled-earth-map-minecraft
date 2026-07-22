@@ -90,6 +90,38 @@ wizualnym — w kodzie oznaczone i obsłużone matematycznie, docelowo z czapą 
 
 ---
 
+## Opcjonalna integracja z Immersive Portals (naprawdę widoczny szew)
+
+Domyślnie fold na antymerydianie jest **niewidocznym teleportem** (patrz wyżej) — celowo, bo teren po
+drugiej stronie jest identyczny, więc immersja polega na braku granicy, a nie na efekcie portalu.
+Jeśli jednak chcesz naprawdę *widzieć* drugą stronę mapy zanim w nią wejdziesz — z taką płynnością jak
+w modzie [Immersive Portals](https://github.com/iPortalTeam/ImmersivePortalsMod) — Geoid wykrywa go
+automatycznie (`ImmersivePortalsSupport.PRESENT`, `FabricLoader.isModLoaded("immersive_portals")`) i
+oddaje mu obsługę szwu wschód-zachód, zamiast teleportować gracza samodzielnie.
+
+**Immersive Portals ma gotową funkcję do dokładnie tego** — strefę zawijania świata
+(`WorldWrappingPortal`) — więc po stronie Geoid nie trzeba pisać żadnego kodu tworzącego portale.
+Wystarczy, że operator serwera **raz** wpisze w grze (poziom uprawnień 2, jak przy `/gamerule`):
+
+```
+/portal global create_outward_wrapping -20015087 -15000000 20015087 15000000
+```
+
+Współrzędne to narożniki prostokąta z `EquirectangularProjection`: X = ±`wrapPeriodX()/2`
+(~20 015 087 — dokładny szew antymerydianu) i Z znacznie szerzej niż realny limit biegunów
+(~10 007 543), żeby brzegi północ-południe tej strefy nigdy nie zostały fizycznie osiągnięte —
+Geoid i tak zawraca gracza na biegunie swoim własnym `foldPole` (odbicie + obrót o 180°, nie prosta
+pętla, więc nie pasuje do generycznego zawijania Immersive Portals). Realnie używane będą więc tylko
+portale wschód-zachód.
+
+Gdy `ImmersivePortalsSupport.PRESENT` jest `true`, `GeoidServer` przestaje sam teleportować gracza na
+szwie długości geograficznej (zrobiłby to podwójnie — portal już go przeniósł) i zamiast tego wykrywa
+skok pozycji o dokładnie jeden okres między tickami (`WorldFolding#reconcileExternalFold`), żeby
+`windowOffsetX` zostało w synchronizacji z tym, co faktycznie zrobił portal. Biegunowy fold działa jak
+zawsze, niezależnie od obecności moda.
+
+---
+
 ## Jak działa kopanie do antypodów (tunel jądra)
 
 `CoreTunnel` modeluje przejście w dwóch skalach jednocześnie:
@@ -184,7 +216,10 @@ resources/data/geoid/
 
 ## Wersje i budowanie
 
-Celowany stack: **Fabric / Yarn, Minecraft 1.21.11, Java 21** (patrz `gradle.properties`). Warstwa
+Celowany stack: **Fabric / Yarn, Minecraft 1.21.1, Java 21** (patrz `gradle.properties`) — przypięty
+świadomie do 1.21.1, a nie najnowszej łatki 1.21.x, żeby dzielić serwer z Immersive Portals (patrz
+`suggests.immersive_portals` w `fabric.mod.json`), którego najnowszy publikowany build deklaruje
+wsparcie tylko do 1.21.1. Warstwa
 matematyczna i fizyczna (`math/`, `world.CoreTunnel`, `world.PlayerGeoState`, `physics.SphericalPhysics`)
 jest niezależna od wersji, wolna od zależności na klasy Minecrafta i objęta testami JUnit
 (`./gradlew test`) — w tym `SphericalPhysicsTest`, który przypina dokładnie kompresję szybu jądra
@@ -194,16 +229,17 @@ oznaczone komentarzami w miejscach zależnych od mapowań — przy zmianie wersj
 punkty, logika zostaje.
 
 **Status builda:** pipeline CI (`.github/workflows/build.yml`) buduje mod na runnerach GitHub Actions
-przeciw Minecraft 1.21.11 przez Fabric Loom, przechodzi testy jednostkowe i produkuje `geoid-*.jar`
+przeciw Minecraft 1.21.1 przez Fabric Loom, przechodzi testy jednostkowe i produkuje `geoid-*.jar`
 (artefakt `geoid-jars`) — sprawdź aktualny status pod odznaką na górze tego pliku. **Uwaga:** zielony
 build oznacza „kompiluje się, testy przechodzą, jar powstaje" — nie zastępuje testów w żywej grze
 (faktyczne zachowanie mixinów w runtime, feel seamless-teleportu i teleportu międzywymiarowego,
 preload chunków pod obciążeniem).
 
 `CameraRollMixin` to najbardziej wrażliwy na wersję hak (nazwy pól `Camera`), `EntityGravityMixin`
-celuje w `applyGravity()` (MC 1.21.3+), a `GeoidServer#teleportCrossDimension` celuje w
-`ServerPlayerEntity#teleport(ServerWorld, double, double, double, Set, float, float, boolean)`
-(potwierdzone dla Yarn 1.21.11) — dla starszych/nowszych wersji to jedyne trzy miejsca do poprawy.
+celuje w `applyGravity()` (potwierdzone dla Yarn 1.21.1), a `GeoidServer#teleportCrossDimension` celuje w
+`ServerPlayerEntity#teleport(ServerWorld, double, double, double, float, float)` (ten prostszy,
+sprzed-1.21.4 wariant bez zbioru flag/boola na końcu — potwierdzone dla Yarn 1.21.1) — dla
+starszych/nowszych wersji to jedyne trzy miejsca do poprawy.
 
 > Uwaga: reflektywne wiązanie z Tellusem (`TellusBridges.tryBindTellus`) jest celowo zaślepione do
 > fallbacku, dopóki Tellus nie wystawi stabilnego API projekcji — wtedy podmienia się jedną metodę.

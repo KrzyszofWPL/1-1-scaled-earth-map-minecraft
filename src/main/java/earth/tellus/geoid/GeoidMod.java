@@ -1,8 +1,11 @@
 package earth.tellus.geoid;
 
+import earth.tellus.geoid.command.GeoidCommand;
+import earth.tellus.geoid.integration.ImmersivePortalsSupport;
 import earth.tellus.geoid.net.GeoStatePayload;
 import earth.tellus.geoid.world.GeoidServer;
 import net.fabricmc.api.ModInitializer;
+import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
@@ -26,6 +29,10 @@ public final class GeoidMod implements ModInitializer {
         // Register the server -> client state snapshot channel.
         PayloadTypeRegistry.playS2C().register(GeoStatePayload.ID, GeoStatePayload.CODEC);
 
+        // OP-only /geoid command to tune the engine live (see GeoidCommand).
+        CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
+                GeoidCommand.register(dispatcher));
+
         // Drive the spherical engine once per player per tick.
         ServerTickEvents.END_SERVER_TICK.register(server -> {
             for (var player : server.getPlayerManager().getPlayerList()) {
@@ -40,6 +47,11 @@ public final class GeoidMod implements ModInitializer {
         // Drop per-player spherical state when they leave.
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) ->
                 GeoidServer.get().forget(handler.getPlayer().getUuid()));
+
+        if (ImmersivePortalsSupport.PRESENT) {
+            LOG.info("Immersive Portals detected: longitude seam handed off to it once a wrap portal "
+                    + "is set up (see README) — run '/portal global create_outward_wrapping ...' once.");
+        }
 
         LOG.info("Geoid spherical-earth engine initialised (companion to Tellus).");
     }

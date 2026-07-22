@@ -12,7 +12,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * the engine actually wants to take over (a player mid core-traversal). In every other case this hook
  * returns immediately and vanilla physics runs untouched, so normal surface play is unaffected.
  *
- * <p>Targets {@code Entity#applyGravity()} (the gravity step factored out in MC 1.21.3+). On the near
+ * <p>Targets {@code Entity#applyGravity()} (present at least as of 1.21.1, confirmed against its Yarn
+ * mappings). On the near
  * side of a core traversal the applied gravity is {@code -Y} exactly like vanilla; the interesting part
  * is past the centre, where {@link GeoidGravity} applies {@code +Y} gravity so the player is pulled back
  * toward the (now overhead) centre — the physical basis of the 180-degree flip.

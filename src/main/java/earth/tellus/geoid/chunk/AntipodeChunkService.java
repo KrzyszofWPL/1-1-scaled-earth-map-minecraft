@@ -14,22 +14,18 @@ import net.minecraft.util.math.ChunkPos;
  * the terrain, structures and Tellus heightmap are all present when the player arrives, without paying
  * to keep entities and block-ticks running there.
  *
- * <p>Targets Fabric / Yarn on Minecraft 1.21.x. If your mappings differ, only the three MC calls here
- * ({@code new ChunkTicketType}, {@code addTicket}, {@code removeTicket}) need adjusting — the scheduling
- * logic lives entirely in {@link AntipodeChunkLoader} and is untouched.
+ * <p>Targets Fabric / Yarn on Minecraft 1.21.1. If your mappings differ, only the three MC calls here
+ * ({@code ChunkTicketType.create}, {@code addTicket}, {@code removeTicket}) need adjusting — the
+ * scheduling logic lives entirely in {@link AntipodeChunkLoader} and is untouched.
  */
 public final class AntipodeChunkService implements AntipodeChunkLoader.TicketSink {
 
     /**
      * Ticket type for spherical pre-loading. Expires after 200 ticks (10s) so a stale bridge unloads
      * itself; the loader refreshes it every tick while the player is still approaching.
-     *
-     * <p>{@code ChunkTicketType} is a non-generic record under 1.21.11 (Yarn); custom types are built
-     * directly via its public constructor instead of the removed {@code create(...)} factory, and the
-     * ticket argument is always a {@link ChunkPos} (no per-type comparator).
      */
-    public static final ChunkTicketType GEOID_PRELOAD =
-            new ChunkTicketType(200L, ChunkTicketType.FOR_LOADING | ChunkTicketType.CAN_EXPIRE_BEFORE_LOAD);
+    public static final ChunkTicketType<ChunkPos> GEOID_PRELOAD =
+            ChunkTicketType.create("geoid_preload", java.util.Comparator.comparingLong(ChunkPos::toLong), 200);
 
     /**
      * Level 33 = "border" (loaded + full generation, no ticking). 31 would also tick entities/blocks;
@@ -47,13 +43,13 @@ public final class AntipodeChunkService implements AntipodeChunkLoader.TicketSin
     public void addTicket(int chunkX, int chunkZ) {
         ServerChunkManager cm = world.getChunkManager();
         ChunkPos pos = new ChunkPos(chunkX, chunkZ);
-        cm.addTicket(GEOID_PRELOAD, pos, PRELOAD_LEVEL);
+        cm.addTicket(GEOID_PRELOAD, pos, PRELOAD_LEVEL, pos);
     }
 
     @Override
     public void removeTicket(int chunkX, int chunkZ) {
         ServerChunkManager cm = world.getChunkManager();
         ChunkPos pos = new ChunkPos(chunkX, chunkZ);
-        cm.removeTicket(GEOID_PRELOAD, pos, PRELOAD_LEVEL);
+        cm.removeTicket(GEOID_PRELOAD, pos, PRELOAD_LEVEL, pos);
     }
 }

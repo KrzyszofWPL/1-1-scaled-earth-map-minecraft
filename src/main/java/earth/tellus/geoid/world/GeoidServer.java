@@ -8,6 +8,7 @@ import earth.tellus.geoid.GeoidMod;
 import earth.tellus.geoid.chunk.AntipodeChunkLoader;
 import earth.tellus.geoid.chunk.AntipodeChunkService;
 import earth.tellus.geoid.config.GeoidConfig;
+import earth.tellus.geoid.integration.ImmersivePortalsSupport;
 import earth.tellus.geoid.integration.TellusBridge;
 import earth.tellus.geoid.integration.TellusBridges;
 import earth.tellus.geoid.math.Geodetic;
@@ -16,15 +17,18 @@ import earth.tellus.geoid.math.Vec3;
 import earth.tellus.geoid.net.GeoStatePayload;
 import earth.tellus.geoid.physics.SphericalPhysics;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import net.minecraft.particle.ParticleTypes;
 import net.minecraft.registry.RegistryKey;
 import net.minecraft.registry.RegistryKeys;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
+import net.minecraft.sound.SoundCategory;
+import net.minecraft.sound.SoundEvents;
+import net.minecraft.text.Text;
+import net.minecraft.util.Formatting;
 import net.minecraft.util.Identifier;
 import net.minecraft.world.Heightmap;
 import net.minecraft.world.World;
-
-import java.util.Set;
 
 /**
  * Server-side orchestration: one place that turns the pure spherical logic into actual moves on the
@@ -102,7 +106,7 @@ public final class GeoidServer {
      */
     public void tickPlayer(ServerPlayerEntity player) {
         GeoidConfig cfg = GeoidConfig.get();
-        ServerWorld overworld = player.getEntityWorld().getServer().getOverworld();
+        ServerWorld overworld = player.getServer().getOverworld();
         WorldFolding folding = foldingFor(overworld);
         AntipodeChunkLoader loader = loaderFor(overworld);
         PlayerGeoState state = stateFor(player, folding);
@@ -129,22 +133,37 @@ public final class GeoidServer {
         state.geodetic = folding.mcToGeodetic(player.getX(), player.getY(), player.getZ());
 
         if (cfg.enableCircumnavigation) {
-            // 2. Pre-generate the seam bridge if we are approaching the antimeridian.
-            double bridgeMapX = folding.seamBridgeTargets(player.getX());
-            if (!Double.isNaN(bridgeMapX)) {
-                loader.requestArea(bridgeMapX, player.getZ(), cfg.seamOverlapChunks);
+            if (ImmersivePortalsSupport.PRESENT) {
+                // A real, see-through Immersive Portals wrap portal (set up by the server operator via
+                // /portal global create_outward_wrapping — see the README) already relocated the player
+                // physically if they just crossed the seam; teleporting them again here would double-move
+                // them. Just detect that jump and keep windowOffsetX in sync with it.
+                if (!Double.isNaN(state.lastMcX) && folding.reconcileExternalFold(state.lastMcX, player.getX())) {
+                    state.geodetic = folding.mcToGeodetic(player.getX(), player.getY(), player.getZ());
+                    state.foldEpoch++; // still suppress client interpolation across the jump
+                }
+            } else {
+                // 2. Pre-generate the seam bridge if we are approaching the antimeridian.
+                double bridgeMapX = folding.seamBridgeTargets(player.getX());
+                if (!Double.isNaN(bridgeMapX)) {
+                    loader.requestArea(bridgeMapX, player.getZ(), cfg.seamOverlapChunks);
+                }
+
+                // 3. Fold longitude, teleporting seamlessly if needed.
+                WorldFolding.FoldResult lon = folding.foldLongitude(player.getX(), player.getZ());
+                if (lon.teleported) {
+                    applyFold(player, state, lon.newMinecraftX, player.getY(), lon.newMinecraftZ, lon.bearingDelta);
+                }
             }
 
-            // 3. Fold longitude, then pole, teleporting seamlessly if needed.
-            WorldFolding.FoldResult lon = folding.foldLongitude(player.getX(), player.getZ());
-            if (lon.teleported) {
-                applyFold(player, state, lon.newMinecraftX, player.getY(), lon.newMinecraftZ, lon.bearingDelta);
-            }
+            // Pole seam is a reflect-and-flip, not a plain loop, so it doesn't fit Immersive Portals'
+            // generic wrapping-zone feature — always Geoid's own invisible teleport, regardless of (3).
             WorldFolding.FoldResult pole = folding.foldPole(player.getX(), player.getZ());
             if (pole.teleported) {
                 applyFold(player, state, pole.newMinecraftX, player.getY(), pole.newMinecraftZ, pole.bearingDelta);
             }
         }
+        state.lastMcX = player.getX();
 
         // 4. Core-entry detection: sustained straight-down below the local surface threshold.
         if (cfg.enableSphericalGravity && state.geodetic.altitude <= -cfg.coreEntryDepth && isDiggingDown(player)) {
@@ -161,6 +180,23 @@ public final class GeoidServer {
         setVelocity(player, vel); // keep momentum across the seam
         state.bearingRad += bearingDelta;
         state.foldEpoch++;
+
+        if (GeoidConfig.get().debugFoldFeedback) {
+            playFoldFeedback(player);
+        }
+    }
+
+    /**
+     * Debug-only perceptual cue for a seam crossing (see {@link GeoidConfig#debugFoldFeedback}). The
+     * fold itself is designed to be unnoticeable — this exists purely so a player/dev who turns the
+     * flag on via {@code /geoid debugFold true} can confirm a wrap actually fired.
+     */
+    private static void playFoldFeedback(ServerPlayerEntity player) {
+        ServerWorld world = (ServerWorld) player.getEntityWorld();
+        world.playSound(null, player.getBlockPos(), SoundEvents.BLOCK_PORTAL_TRAVEL, SoundCategory.PLAYERS, 0.4f, 1.6f);
+        world.spawnParticles(ParticleTypes.PORTAL,
+                player.getX(), player.getY() + 1.0, player.getZ(), 30, 0.5, 1.0, 0.5, 0.05);
+        player.sendMessage(Text.literal("~ world seam crossed ~").formatted(Formatting.GRAY, Formatting.ITALIC), true);
     }
 
     // ------------------------------------------------------------------ core traversal / antipode
@@ -176,7 +212,7 @@ public final class GeoidServer {
         state.frame = tunnel.frameAt(state.coreParam);
         state.foldEpoch++; // suppress client interpolation across the dimension jump
 
-        ServerWorld coreWorld = player.getEntityWorld().getServer().getWorld(CORE_WORLD_KEY);
+        ServerWorld coreWorld = player.getServer().getWorld(CORE_WORLD_KEY);
         if (coreWorld == null) {
             GeoidMod.LOG.warn("Dimension '{}' is not loaded (missing datapack?); core traversal will "
                     + "run in place without the compressed shaft.", CORE_WORLD_KEY.getValue());
@@ -209,7 +245,7 @@ public final class GeoidServer {
             loader.requestArea(mc.x, mc.z, cfg.antipodePreloadRadius);
         }
 
-        ServerWorld overworld = player.getEntityWorld().getServer().getOverworld();
+        ServerWorld overworld = player.getServer().getOverworld();
 
         // Retreat: climbed back up past the entry threshold without reaching the centre -> pop back to
         // the real shaft they dug, instead of leaving them stranded in the compressed dimension.
@@ -281,17 +317,17 @@ public final class GeoidServer {
      * Moves a player to an absolute position, possibly in a different dimension.
      *
      * <p>Version-sensitive: targets {@code ServerPlayerEntity#teleport(ServerWorld, double, double,
-     * double, Set, float, float, boolean)} (MC 1.21.4+ Yarn; confirmed present under 1.21.11). An empty
-     * flag set means every coordinate/angle is absolute, never relative to the player's current world.
+     * double, float, float)} (confirmed against the 1.21.1 Yarn mappings — the flag-set/etc. overload
+     * used on 1.21.4+ doesn't exist yet here).
      */
     private static void teleportCrossDimension(ServerPlayerEntity player, ServerWorld target,
                                                double x, double y, double z, float yaw, float pitch) {
-        player.teleport(target, x, y, z, Set.of(), yaw, pitch, true);
+        player.teleport(target, x, y, z, yaw, pitch);
     }
 
     private static boolean isDiggingDown(ServerPlayerEntity player) {
         // Heuristic: moving downward and looking steeply down. Refine with a block-break hook if desired.
-        return (player.getY() - player.lastY) < -0.05 && player.getPitch() > 45.0f;
+        return (player.getY() - player.prevY) < -0.05 && player.getPitch() > 45.0f;
     }
 
     private static Vec3 velocityOf(ServerPlayerEntity player) {

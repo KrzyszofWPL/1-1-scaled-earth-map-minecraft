@@ -117,6 +117,36 @@ public final class WorldFolding {
     }
 
     /**
+     * Reconciles {@code windowOffsetX} after <em>something else</em> moved the player across the
+     * longitude seam — namely a real Immersive Portals wrap portal (see {@link
+     * earth.tellus.geoid.integration.ImmersivePortalsSupport}), which physically relocates the player
+     * itself, so {@link #foldLongitude} must not also teleport them.
+     *
+     * <p>Detects the crossing indirectly: ordinary per-tick movement is at most a handful of blocks,
+     * so an observed jump within {@code tolerance} of a full {@link GeoProjection#wrapPeriodX()} can
+     * only be that portal firing. When it fires, {@code windowOffsetX} is adjusted by exactly the
+     * amount {@link #foldLongitude} would have applied, keeping {@code trueMapX} continuous — but no
+     * teleport is returned, because the player is already where they need to be.
+     *
+     * @param lastMcX    the player's Minecraft X at the end of the previous tick
+     * @param currentMcX the player's Minecraft X now
+     * @return true if a seam crossing was detected and {@code windowOffsetX} was adjusted
+     */
+    public boolean reconcileExternalFold(double lastMcX, double currentMcX) {
+        double period = projection.wrapPeriodX();
+        if (!Double.isFinite(period)) {
+            return false;
+        }
+        double delta = currentMcX - lastMcX;
+        double tolerance = period * 0.01; // generous: real movement per tick is negligible next to a period
+        if (Math.abs(Math.abs(delta) - period) >= tolerance) {
+            return false;
+        }
+        windowOffsetX += delta > 0 ? -period : period;
+        return true;
+    }
+
+    /**
      * Handles the pole seam. When the player's latitude would exceed the pole, they instead continue
      * onto the far side: latitude reflects back off the pole, longitude flips by 180 degrees, and their
      * heading reverses. In Minecraft-X terms the longitude flip is a half-period shift.
