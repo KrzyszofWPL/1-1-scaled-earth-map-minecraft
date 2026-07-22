@@ -1,5 +1,6 @@
 package earth.tellus.geoid.chunk;
 
+import earth.tellus.geoid.mixin.ChunkTicketTypeInvoker;
 import net.minecraft.server.world.ChunkTicketType;
 import net.minecraft.server.world.ServerChunkManager;
 import net.minecraft.server.world.ServerWorld;
@@ -24,7 +25,8 @@ public final class AntipodeChunkService implements AntipodeChunkLoader.TicketSin
      * Ticket type for spherical pre-loading. Expires after 200 ticks (10s) so a stale bridge unloads
      * itself; the loader refreshes it every tick while the player is still approaching.
      */
-    public static final ChunkTicketType GEOID_PRELOAD = ChunkTicketType.register("geoid_preload", 200, 0);
+    public static final ChunkTicketType GEOID_PRELOAD =
+            ChunkTicketTypeInvoker.geoid$register("geoid_preload", 200, 0);
 
     /**
      * Level 33 = "border" (loaded + full generation, no ticking). 31 would also tick entities/blocks;

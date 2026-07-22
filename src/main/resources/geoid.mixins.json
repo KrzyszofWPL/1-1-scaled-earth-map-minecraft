@@ -4,7 +4,9 @@
   "package": "earth.tellus.geoid.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
-    "EntityGravityMixin"
+    "EntityGravityMixin",
+    "ChunkTicketTypeInvoker",
+    "WorldAccessor"
   ],
   "client": [
     "CameraRollMixin"

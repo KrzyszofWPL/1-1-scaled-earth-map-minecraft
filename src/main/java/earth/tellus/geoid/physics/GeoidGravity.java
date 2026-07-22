@@ -2,6 +2,7 @@ package earth.tellus.geoid.physics;
 
 import java.util.function.Function;
 
+import earth.tellus.geoid.mixin.WorldAccessor;
 import earth.tellus.geoid.world.CoreTunnel;
 import earth.tellus.geoid.world.GeoidServer;
 import earth.tellus.geoid.world.PlayerGeoState;
@@ -51,7 +52,7 @@ public final class GeoidGravity {
     }
 
     private static PlayerGeoState lookupState(Entity self) {
-        if (self.getEntityWorld().isClient) {
+        if (((WorldAccessor) self.getEntityWorld()).geoid$isClient()) {
             Function<Entity, PlayerGeoState> fn = clientLookup;
             return fn == null ? null : fn.apply(self);
         }
