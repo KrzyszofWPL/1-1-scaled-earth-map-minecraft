@@ -168,9 +168,14 @@ public final class GeoidServer {
         }
         state.lastMcX = player.getX();
 
-        // 4. Core-entry detection: sustained straight-down digging past coreEntryDepth blocks below sea
-        //    level (not below wherever the player started digging — see GeoidConfig#coreEntryDepth).
-        if (cfg.enableSphericalGravity && state.geodetic.altitude <= -cfg.coreEntryDepth && isDiggingDown(player)) {
+        // 4. Core-entry detection: coreEntryDepth blocks below sea level (not below wherever the player
+        //    started digging — see GeoidConfig#coreEntryDepth). Deliberately not gated on "is the player
+        //    actively falling/looking down": that heuristic went dead in Creative flight (mining a block
+        //    below your feet while hovering doesn't change Y unless you also hold descend) and was
+        //    fragile in Survival too (e.g. pitch dipping under the 45-degree cutoff while aiming down a
+        //    staircase shaft). The phase switch below already makes this a one-shot trigger, so the
+        //    altitude threshold alone is sufficient.
+        if (cfg.enableSphericalGravity && state.geodetic.altitude <= -cfg.coreEntryDepth) {
             beginCoreTraversal(player, folding, state, cfg);
         }
     }
@@ -335,11 +340,6 @@ public final class GeoidServer {
     private static void teleportCrossDimension(ServerPlayerEntity player, ServerWorld target,
                                                double x, double y, double z, float yaw, float pitch) {
         player.teleport(target, x, y, z, yaw, pitch);
-    }
-
-    private static boolean isDiggingDown(ServerPlayerEntity player) {
-        // Heuristic: moving downward and looking steeply down. Refine with a block-break hook if desired.
-        return (player.getY() - player.prevY) < -0.05 && player.getPitch() > 45.0f;
     }
 
     private static Vec3 velocityOf(ServerPlayerEntity player) {
