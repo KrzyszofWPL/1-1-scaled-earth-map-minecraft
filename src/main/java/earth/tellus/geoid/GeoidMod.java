@@ -1,5 +1,6 @@
 package earth.tellus.geoid;
 
+import earth.tellus.geoid.config.GeoidConfigIO;
 import earth.tellus.geoid.net.GeoStatePayload;
 import earth.tellus.geoid.world.GeoidServer;
 import net.fabricmc.api.ModInitializer;
@@ -23,6 +24,9 @@ public final class GeoidMod implements ModInitializer {
 
     @Override
     public void onInitialize() {
+        // Load config/geoid.json (writing a default template on first run) before anything reads it.
+        GeoidConfigIO.load();
+
         // Register the server -> client state snapshot channel.
         PayloadTypeRegistry.playS2C().register(GeoStatePayload.ID, GeoStatePayload.CODEC);
 
