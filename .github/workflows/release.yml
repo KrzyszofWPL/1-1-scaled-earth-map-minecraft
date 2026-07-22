@@ -45,26 +45,26 @@ jobs:
       - name: Write release notes
         run: |
           cat > RELEASE_NOTES.md <<'EOF'
-          **Geoid — silnik kulistej Ziemi dla moda Tellus** (mod Fabric, Minecraft 1.21.3).
+          **Geoid — silnik kulistej Ziemi dla moda Tellus** (mod Fabric, Minecraft 1.21.11).
 
           Zamienia płaską mapę 1:1 w zamkniętą kulę: seamless circumnavigation (coordinate
           folding), grawitacja sferyczna i kopanie do antypodów przez jądro.
 
           ### Instalacja
-          1. Fabric Loader dla Minecraft **1.21.3**.
-          2. **Fabric API** (`0.110.0+1.21.3`) do folderu `mods/` — wymagane.
+          1. Fabric Loader dla Minecraft **1.21.11**.
+          2. **Fabric API** (`0.141.5+1.21.11`) do folderu `mods/` — wymagane.
           3. `geoid-*.jar` (z załączników poniżej) do `mods/`.
           4. Opcjonalnie: mod **Tellus** do `mods/` (bez niego działa fallback — płaska równoprostokątna kula).
 
           ### Status
           Wersja rozwojowa/referencyjna. Zweryfikowane na CI: testy matematyki, pełna
-          kompilacja vs Minecraft 1.21.3 oraz **załadowanie moda i aplikacja mixinów na
+          kompilacja vs Minecraft 1.21.11 oraz **załadowanie moda i aplikacja mixinów na
           żywym serwerze** (log: `Geoid spherical-earth engine initialised` + `Done`).
           Pełne wizualne zachowania w kliencie (roll kamery, seamless-teleport, kopanie do
           antypodu) nie były jeszcze przeklikane w grze. Wiązanie z Tellusem to na razie
           zaślepka → fallback.
 
-          Plik do gry: **`geoid-0.1.0.jar`** (pomiń `-sources.jar`).
+          Plik do gry: **`geoid-0.2.0.jar`** (pomiń `-sources.jar`).
           EOF
 
       - name: Publish GitHub Release
