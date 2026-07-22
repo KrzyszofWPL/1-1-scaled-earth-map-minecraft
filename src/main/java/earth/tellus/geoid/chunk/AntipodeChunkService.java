@@ -15,7 +15,7 @@ import net.minecraft.util.math.ChunkPos;
  * to keep entities and block-ticks running there.
  *
  * <p>Targets Fabric / Yarn on Minecraft 1.21.x. If your mappings differ, only the three MC calls here
- * ({@code create}, {@code addTicket}, {@code removeTicket}) need adjusting — the scheduling logic lives
+ * ({@code register}, {@code addTicket}, {@code removeTicket}) need adjusting — the scheduling logic lives
  * entirely in {@link AntipodeChunkLoader} and is untouched.
  */
 public final class AntipodeChunkService implements AntipodeChunkLoader.TicketSink {
@@ -24,8 +24,7 @@ public final class AntipodeChunkService implements AntipodeChunkLoader.TicketSin
      * Ticket type for spherical pre-loading. Expires after 200 ticks (10s) so a stale bridge unloads
      * itself; the loader refreshes it every tick while the player is still approaching.
      */
-    public static final ChunkTicketType<ChunkPos> GEOID_PRELOAD =
-            ChunkTicketType.create("geoid_preload", java.util.Comparator.comparingLong(ChunkPos::toLong), 200);
+    public static final ChunkTicketType GEOID_PRELOAD = ChunkTicketType.register("geoid_preload", 200, 0);
 
     /**
      * Level 33 = "border" (loaded + full generation, no ticking). 31 would also tick entities/blocks;
@@ -43,13 +42,13 @@ public final class AntipodeChunkService implements AntipodeChunkLoader.TicketSin
     public void addTicket(int chunkX, int chunkZ) {
         ServerChunkManager cm = world.getChunkManager();
         ChunkPos pos = new ChunkPos(chunkX, chunkZ);
-        cm.addTicket(GEOID_PRELOAD, pos, PRELOAD_LEVEL, pos);
+        cm.addTicket(GEOID_PRELOAD, pos, PRELOAD_LEVEL);
     }
 
     @Override
     public void removeTicket(int chunkX, int chunkZ) {
         ServerChunkManager cm = world.getChunkManager();
         ChunkPos pos = new ChunkPos(chunkX, chunkZ);
-        cm.removeTicket(GEOID_PRELOAD, pos, PRELOAD_LEVEL, pos);
+        cm.removeTicket(GEOID_PRELOAD, pos, PRELOAD_LEVEL);
     }
 }

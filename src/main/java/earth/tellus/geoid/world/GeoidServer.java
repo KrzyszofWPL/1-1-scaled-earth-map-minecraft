@@ -75,7 +75,7 @@ public final class GeoidServer {
     /** Called once per player per server tick (from a Fabric ServerTickEvents hook). */
     public void tickPlayer(ServerPlayerEntity player) {
         GeoidConfig cfg = GeoidConfig.get();
-        ServerWorld world = (ServerWorld) player.getWorld();
+        ServerWorld world = (ServerWorld) player.getEntityWorld();
         WorldFolding folding = foldingFor(world);
         AntipodeChunkLoader loader = loaderFor(world);
         PlayerGeoState state = stateFor(player, folding);
@@ -158,7 +158,7 @@ public final class GeoidServer {
         }
 
         double prevParam = state.coreParam;
-        double realizedDy = player.getY() - player.prevY; // MC-facing: realised vertical move this tick
+        double realizedDy = player.getY() - player.lastY; // MC-facing: realised vertical move this tick
         SphericalPhysics.advanceTraversal(state, tunnel, realizedDy);
 
         // Pre-load the antipodal surface as soon as we pass the centre, so the exit never shows a hole.
@@ -201,7 +201,7 @@ public final class GeoidServer {
 
     private static boolean isDiggingDown(ServerPlayerEntity player) {
         // Heuristic: moving downward and looking steeply down. Refine with a block-break hook if desired.
-        return (player.getY() - player.prevY) < -0.05 && player.getPitch() > 45.0f;
+        return (player.getY() - player.lastY) < -0.05 && player.getPitch() > 45.0f;
     }
 
     private static Vec3 velocityOf(ServerPlayerEntity player) {
@@ -211,6 +211,6 @@ public final class GeoidServer {
 
     private static void setVelocity(ServerPlayerEntity player, Vec3 v) {
         player.setVelocity(v.x, v.y, v.z);
-        player.velocityModified = true;
+        player.velocityDirty = true;
     }
 }
