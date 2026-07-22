@@ -37,8 +37,15 @@ public final class CoreTunnel {
     /** Real 1:1 terrain depth kept on each surface shell before compression begins (blocks). */
     public static final double SHELL_DEPTH = 512.0;
 
-    /** Compressed visual height allotted to the entire deep interior, per side (blocks). */
-    public static final double INTERIOR_VISUAL_HALF = 3072.0;
+    /**
+     * Compressed visual height allotted to the entire deep interior, per side (blocks).
+     *
+     * <p>Sized so the full shaft ({@link #visualShaftHeight()} = {@code 2*SHELL_DEPTH +
+     * 2*INTERIOR_VISUAL_HALF}) fits inside the {@code geoid:core} dimension's world-height budget
+     * ({@code min_y=-2032, height=4064}, the largest span Minecraft's chunk format allows), with margin
+     * to spare on both ends. See {@code GeoidServer} for the actual Y placement inside that dimension.
+     */
+    public static final double INTERIOR_VISUAL_HALF = 1400.0;
 
     /** Half-width (in {@code s}) of the centre zone over which the frame flip is slerped. */
     private static final double FLIP_ZONE = 2000.0;

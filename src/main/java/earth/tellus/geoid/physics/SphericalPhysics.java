@@ -58,19 +58,29 @@ public final class SphericalPhysics {
     }
 
     /**
-     * Advances the core-traversal parameter from the player's realised vertical movement this tick.
-     * Digging/falling downward (negative Minecraft dY) increases {@code s}; moving back up decreases it.
-     * The player's phase and reference-frame flip are updated as they cross the centre.
+     * Recomputes the core-traversal parameter {@code s} from the player's absolute Y position inside
+     * the compressed {@code geoid:core} dimension.
      *
-     * @param realizedDy the actual change in Minecraft Y this tick (after collision resolution)
+     * <p>This is deliberately <em>not</em> an incremental integration of per-tick deltas: the interior
+     * is visually compressed ({@link CoreTunnel#sToVisualDepth}), so one block of real Y movement can
+     * represent anywhere from one block to several thousand blocks of true diameter depending on how
+     * deep the player is. Deriving {@code s} fresh each tick via {@link CoreTunnel#visualDepthToS} keys
+     * the compression ratio exactly to position rather than accumulating drift, and self-corrects if the
+     * player is pushed or knocked back.
+     *
+     * @param coreDimensionY     the player's current Y inside the {@code geoid:core} dimension
+     * @param coreDimensionEntryY the Y at which this traversal entered the dimension (visual depth 0)
+     * @param coreEntryDepth     the real dig depth (blocks below the origin surface) at which the
+     *                           traversal began — {@code s} at entry, and still inside the 1:1 shell
      */
-    public static void advanceTraversal(PlayerGeoState state, CoreTunnel traversal, double realizedDy) {
+    public static void advanceTraversal(PlayerGeoState state, CoreTunnel traversal,
+                                        double coreDimensionY, double coreDimensionEntryY, double coreEntryDepth) {
         if (traversal == null || state.phase == PlayerGeoState.Phase.SURFACE) {
             return;
         }
-        // Downward motion (dY < 0) advances s; the sign convention matches sToVisualDepth being
-        // monotonic with dig depth.
-        state.coreParam = clamp(state.coreParam - realizedDy, 0.0, earth.tellus.geoid.math.SphereMath.DIAMETER);
+        double visualAtEntry = traversal.sToVisualDepth(coreEntryDepth);
+        double visualDepth = visualAtEntry + (coreDimensionEntryY - coreDimensionY);
+        state.coreParam = clamp(traversal.visualDepthToS(visualDepth), 0.0, earth.tellus.geoid.math.SphereMath.DIAMETER);
         state.frame = traversal.frameAt(state.coreParam);
         state.geodetic = traversal.geodeticAt(state.coreParam);
         state.phase = traversal.pastCentre(state.coreParam)
