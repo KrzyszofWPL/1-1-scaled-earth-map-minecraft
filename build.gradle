@@ -2,7 +2,9 @@ plugins {
     // Pinned to a real stable release, not a moving SNAPSHOT: 1.8-SNAPSHOT resolved to a Loom build
     // whose "unpick" metadata parser predates the format the 1.21.11 Yarn mappings ship
     // (UnsupportedOperationException: Unsupported unpick version), so it could never configure.
-    id 'fabric-loom' version '1.17'
+    // 1.10.1 is a confirmed-published, non-SNAPSHOT release compatible with the Gradle 8.10.2 pinned
+    // in gradle/wrapper/gradle-wrapper.properties.
+    id 'fabric-loom' version '1.10.1'
     id 'java'
 }
 
