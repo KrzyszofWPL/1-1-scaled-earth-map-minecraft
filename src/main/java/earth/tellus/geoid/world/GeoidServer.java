@@ -75,6 +75,9 @@ public final class GeoidServer {
     private final Map<net.minecraft.registry.RegistryKey<net.minecraft.world.World>, AntipodeChunkLoader> loaders =
             new ConcurrentHashMap<>();
 
+    /** So a missing {@code geoid:core} dimension logs once, not once per tick a player is digging down. */
+    private volatile boolean warnedCoreDimensionMissing = false;
+
     private GeoidServer() {
     }
 
@@ -204,6 +207,20 @@ public final class GeoidServer {
 
     private void beginCoreTraversal(ServerPlayerEntity player, WorldFolding folding,
                                     PlayerGeoState state, GeoidConfig cfg) {
+        // Validate before mutating any state: if this bails out, the player must stay in SURFACE phase
+        // so the entry check simply retries next tick, instead of getting stranded in CORE_DESCENT with
+        // no dimension to actually place them in and no way back (tickCore only resets to SURFACE when
+        // its CoreTunnel lookup misses, which never happens once one has been stored below).
+        ServerWorld coreWorld = player.getServer().getWorld(CORE_WORLD_KEY);
+        if (coreWorld == null) {
+            if (!warnedCoreDimensionMissing) {
+                warnedCoreDimensionMissing = true;
+                GeoidMod.LOG.warn("Dimension '{}' is not loaded (missing datapack?); core traversal will "
+                        + "not start until it is.", CORE_WORLD_KEY.getValue());
+            }
+            return;
+        }
+
         Geodetic origin = state.geodetic.withAltitude(0.0);
         CoreTunnel tunnel = new CoreTunnel(origin);
         traversals.put(player.getUuid(), tunnel);
@@ -213,12 +230,6 @@ public final class GeoidServer {
         state.frame = tunnel.frameAt(state.coreParam);
         state.foldEpoch++; // suppress client interpolation across the dimension jump
 
-        ServerWorld coreWorld = player.getServer().getWorld(CORE_WORLD_KEY);
-        if (coreWorld == null) {
-            GeoidMod.LOG.warn("Dimension '{}' is not loaded (missing datapack?); core traversal will "
-                    + "run in place without the compressed shaft.", CORE_WORLD_KEY.getValue());
-            return;
-        }
         // Each traversal gets its own column, keyed off the real-world entry point so two players
         // digging in from different places on Earth never collide underground.
         double shaftX = Math.floor(origin.lonDeg() * 1000.0);
