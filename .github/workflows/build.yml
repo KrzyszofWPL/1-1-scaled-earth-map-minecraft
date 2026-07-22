@@ -23,6 +23,12 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x ./gradlew
 
+      - name: TEMP - dump World API in case isClient() guess is wrong
+        run: |
+          ./gradlew -q dumpApi | tee mcjar.txt
+          MCJAR=$(grep MCJAR_PATH:: mcjar.txt | sed 's/MCJAR_PATH:://')
+          javap -p -classpath "$MCJAR" net.minecraft.world.World 2>&1 || true
+
       - name: Run unit tests (pure spherical math)
         run: ./gradlew test --stacktrace
 
