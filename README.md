@@ -184,7 +184,10 @@ resources/data/geoid/
 
 ## Wersje i budowanie
 
-Celowany stack: **Fabric / Yarn, Minecraft 1.21.11, Java 21** (patrz `gradle.properties`). Warstwa
+Celowany stack: **Fabric / Yarn, Minecraft 1.21.1, Java 21** (patrz `gradle.properties`) — przypięty
+świadomie do 1.21.1, a nie najnowszej łatki 1.21.x, żeby dzielić serwer z Immersive Portals (patrz
+`suggests.immersive_portals` w `fabric.mod.json`), którego najnowszy publikowany build deklaruje
+wsparcie tylko do 1.21.1. Warstwa
 matematyczna i fizyczna (`math/`, `world.CoreTunnel`, `world.PlayerGeoState`, `physics.SphericalPhysics`)
 jest niezależna od wersji, wolna od zależności na klasy Minecrafta i objęta testami JUnit
 (`./gradlew test`) — w tym `SphericalPhysicsTest`, który przypina dokładnie kompresję szybu jądra
@@ -194,16 +197,17 @@ oznaczone komentarzami w miejscach zależnych od mapowań — przy zmianie wersj
 punkty, logika zostaje.
 
 **Status builda:** pipeline CI (`.github/workflows/build.yml`) buduje mod na runnerach GitHub Actions
-przeciw Minecraft 1.21.11 przez Fabric Loom, przechodzi testy jednostkowe i produkuje `geoid-*.jar`
+przeciw Minecraft 1.21.1 przez Fabric Loom, przechodzi testy jednostkowe i produkuje `geoid-*.jar`
 (artefakt `geoid-jars`) — sprawdź aktualny status pod odznaką na górze tego pliku. **Uwaga:** zielony
 build oznacza „kompiluje się, testy przechodzą, jar powstaje" — nie zastępuje testów w żywej grze
 (faktyczne zachowanie mixinów w runtime, feel seamless-teleportu i teleportu międzywymiarowego,
 preload chunków pod obciążeniem).
 
 `CameraRollMixin` to najbardziej wrażliwy na wersję hak (nazwy pól `Camera`), `EntityGravityMixin`
-celuje w `applyGravity()` (MC 1.21.3+), a `GeoidServer#teleportCrossDimension` celuje w
-`ServerPlayerEntity#teleport(ServerWorld, double, double, double, Set, float, float, boolean)`
-(potwierdzone dla Yarn 1.21.11) — dla starszych/nowszych wersji to jedyne trzy miejsca do poprawy.
+celuje w `applyGravity()` (potwierdzone dla Yarn 1.21.1), a `GeoidServer#teleportCrossDimension` celuje w
+`ServerPlayerEntity#teleport(ServerWorld, double, double, double, float, float)` (ten prostszy,
+sprzed-1.21.4 wariant bez zbioru flag/boola na końcu — potwierdzone dla Yarn 1.21.1) — dla
+starszych/nowszych wersji to jedyne trzy miejsca do poprawy.
 
 > Uwaga: reflektywne wiązanie z Tellusem (`TellusBridges.tryBindTellus`) jest celowo zaślepione do
 > fallbacku, dopóki Tellus nie wystawi stabilnego API projekcji — wtedy podmienia się jedną metodę.

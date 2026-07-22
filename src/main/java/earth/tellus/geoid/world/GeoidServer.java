@@ -29,8 +29,6 @@ import net.minecraft.util.Identifier;
 import net.minecraft.world.Heightmap;
 import net.minecraft.world.World;
 
-import java.util.Set;
-
 /**
  * Server-side orchestration: one place that turns the pure spherical logic into actual moves on the
  * {@link ServerPlayerEntity}s each tick.
@@ -107,7 +105,7 @@ public final class GeoidServer {
      */
     public void tickPlayer(ServerPlayerEntity player) {
         GeoidConfig cfg = GeoidConfig.get();
-        ServerWorld overworld = player.getEntityWorld().getServer().getOverworld();
+        ServerWorld overworld = player.getServer().getOverworld();
         WorldFolding folding = foldingFor(overworld);
         AntipodeChunkLoader loader = loaderFor(overworld);
         PlayerGeoState state = stateFor(player, folding);
@@ -198,7 +196,7 @@ public final class GeoidServer {
         state.frame = tunnel.frameAt(state.coreParam);
         state.foldEpoch++; // suppress client interpolation across the dimension jump
 
-        ServerWorld coreWorld = player.getEntityWorld().getServer().getWorld(CORE_WORLD_KEY);
+        ServerWorld coreWorld = player.getServer().getWorld(CORE_WORLD_KEY);
         if (coreWorld == null) {
             GeoidMod.LOG.warn("Dimension '{}' is not loaded (missing datapack?); core traversal will "
                     + "run in place without the compressed shaft.", CORE_WORLD_KEY.getValue());
@@ -231,7 +229,7 @@ public final class GeoidServer {
             loader.requestArea(mc.x, mc.z, cfg.antipodePreloadRadius);
         }
 
-        ServerWorld overworld = player.getEntityWorld().getServer().getOverworld();
+        ServerWorld overworld = player.getServer().getOverworld();
 
         // Retreat: climbed back up past the entry threshold without reaching the centre -> pop back to
         // the real shaft they dug, instead of leaving them stranded in the compressed dimension.
@@ -303,17 +301,17 @@ public final class GeoidServer {
      * Moves a player to an absolute position, possibly in a different dimension.
      *
      * <p>Version-sensitive: targets {@code ServerPlayerEntity#teleport(ServerWorld, double, double,
-     * double, Set, float, float, boolean)} (MC 1.21.4+ Yarn; confirmed present under 1.21.11). An empty
-     * flag set means every coordinate/angle is absolute, never relative to the player's current world.
+     * double, float, float)} (confirmed against the 1.21.1 Yarn mappings — the flag-set/etc. overload
+     * used on 1.21.4+ doesn't exist yet here).
      */
     private static void teleportCrossDimension(ServerPlayerEntity player, ServerWorld target,
                                                double x, double y, double z, float yaw, float pitch) {
-        player.teleport(target, x, y, z, Set.of(), yaw, pitch, true);
+        player.teleport(target, x, y, z, yaw, pitch);
     }
 
     private static boolean isDiggingDown(ServerPlayerEntity player) {
         // Heuristic: moving downward and looking steeply down. Refine with a block-break hook if desired.
-        return (player.getY() - player.lastY) < -0.05 && player.getPitch() > 45.0f;
+        return (player.getY() - player.prevY) < -0.05 && player.getPitch() > 45.0f;
     }
 
     private static Vec3 velocityOf(ServerPlayerEntity player) {
